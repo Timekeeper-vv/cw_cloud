@@ -1,0 +1,7 @@
+# 信号滤波分析系统依赖项
+# 安装命令: pip install -r requirements-signal-analysis.txt
+
+numpy>=1.21.0          # 数值计算
+matplotlib>=3.4.0      # 数据可视化
+scipy>=1.7.0           # 科学计算（信号处理、滤波器设计）
+nptdms>=1.3.0          # TDMS 文件读取

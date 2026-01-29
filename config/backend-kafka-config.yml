@@ -1,0 +1,47 @@
+# backend.jar Kafka集成配置 - 高吞吐量优化版
+# 将此配置添加到backend.jar的application.yml
+
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    
+    # 消费者配置 - 高吞吐量优化
+    consumer:
+      group-id: backend-filter-group
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        session.timeout.ms: 30000
+        max.poll.records: 500           # 100 → 500 每次拉取更多消息
+        fetch.min.bytes: 1048576        # 1MB最小拉取量
+        fetch.max.wait.ms: 100          # 最大等待100ms
+        max.partition.fetch.bytes: 10485760  # 10MB每分区最大拉取
+        
+    # 生产者配置 - 高吞吐量优化
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        batch.size: 65536               # 16KB → 64KB
+        linger.ms: 5                    # 10ms → 5ms
+        buffer.memory: 67108864         # 64MB缓冲
+        acks: 0                         # 不等待确认
+
+# 应用配置
+app:
+  kafka:
+    topics:
+      input: sample-input               # 输入主题（与生产者一致）
+      output: sample-output             # 输出主题
+      dlq: filter-error-dlq             # 死信队列
+      
+  filter:
+    algorithm: LMS                       # 默认算法
+    buffer-size: 4096                   # 1024 → 4096 增大缓冲区
+    update-rate: 0.01                   # 学习率
+    batch-processing: true              # 启用批量处理
+    
+  websocket:
+    endpoint: /cal                      # WebSocket端点
+    heartbeat: 30000                   # 心跳间隔(ms)

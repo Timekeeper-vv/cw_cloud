@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # ===========================================
+  # 基础设施服务 - 使用不同端口避免冲突
+  # ===========================================
+  
+  # MySQL 数据库 - 修改端口避免冲突
+  mysql:
+    image: mysql:8.0
+    container_name: yudao-mysql
+    restart: always
+    ports:
+      - "13306:3306"  # 改为13306避免与本地MySQL冲突
+    environment:
+      MYSQL_ROOT_PASSWORD: 20041102
+      MYSQL_DATABASE: ruoyi-vue-pro
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql/mysql:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - yudao-network
+
+  # Redis 缓存 - 修改端口避免冲突
+  redis:
+    image: redis:7.0-alpine
+    container_name: yudao-redis
+    restart: always
+    ports:
+      - "16379:6379"  # 改为16379避免与本地Redis冲突
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - yudao-network
+
+  # Nacos 注册中心 - 独立启动，不依赖MySQL
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: yudao-nacos
+    restart: always
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    environment:
+      MODE: standalone
+      # 使用内嵌数据库，避免MySQL依赖
+      SPRING_DATASOURCE_PLATFORM: embedded
+      JVM_XMS: 256m
+      JVM_XMX: 256m
+    volumes:
+      - nacos_logs:/home/nacos/logs
+      - nacos_data:/home/nacos/data
+    networks:
+      - yudao-network
+
+# ===========================================
+# 后端微服务 - 分离为独立的compose文件
+# ===========================================
+
+# 创建基础设施专用的compose文件
+---
+# 这是基础设施服务的compose文件
+# 使用: docker compose -f docker-compose-infra.yml up -d
+
+networks:
+  yudao-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  nacos_logs:
+    driver: local
+  nacos_data:
+    driver: local

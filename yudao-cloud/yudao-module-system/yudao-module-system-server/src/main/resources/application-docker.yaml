@@ -1,0 +1,51 @@
+spring:
+  main:
+    allow-circular-references: true
+    allow-bean-definition-overriding: true
+  
+  # 数据源配置
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://mysql:3306/ruoyi-vue-pro?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:20041102}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    
+  # Redis 配置
+  redis:
+    host: ${SPRING_REDIS_HOST:redis}
+    port: ${SPRING_REDIS_PORT:6379}
+    password: # Redis 密码，生产环境建议设置
+    timeout: 10s
+    lettuce:
+      pool:
+        max-active: 200
+        max-wait: -1ms
+        max-idle: 10
+        min-idle: 0
+
+  # Cloud 配置
+  cloud:
+    # Nacos 配置项，对应 NacosDiscoveryProperties 配置属性类
+    nacos:
+      discovery:
+        server-addr: ${SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR:nacos:8848}
+        namespace: # 命名空间。这里使用 public 命名空间，也就是不用配置
+
+# 微信小程序配置 - Docker环境暂时禁用
+wx:
+  miniapp:
+    configs:
+      - app-id: demo_app_id  # 临时配置，避免启动错误
+        secret: demo_secret
+        
+# 服务器配置
+server:
+  port: 48081
+
+# 日志配置
+logging:
+  level:
+    # 配置自己写的 MyBatis Mapper 打印日志
+    cn.iocoder.yudao.module.system.dal.mysql: debug
+    com.alibaba.nacos: warn
+    com.binarywang.spring.starter.wxjava: warn

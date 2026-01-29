@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: monitor-server
+  main:
+    allow-bean-definition-overriding: true
+  profiles:
+    active: local
+  servlet:
+    multipart:
+      # 允许上传较大的 TDMS 文件（例如 100MB）
+      max-file-size: 200MB
+      max-request-size: 200MB
+  config:
+    import:
+      - optional:classpath:application-${spring.profiles.active}.yaml
+      - optional:nacos:${spring.application.name}-${spring.profiles.active}.yaml
+
+server:
+  port: 48090
+
+yudao:
+  web:
+    admin-ui:
+      # 仅用于生成消息/链接等场景；本地开发填前端地址即可
+      url: http://127.0.0.1:5173
+  websocket:
+    enable: true
+    path: /monitor/ws
+    sender-type: local
+
+# XXL-Job：本地启动时不需要调度中心，但配置项是必填的（否则启动失败）
+xxl:
+  job:
+    enabled: false
+    admin:
+      addresses: http://127.0.0.1:0/xxl-job-admin
+    executor:
+      appName: monitor-server
+      logPath: ./logs/xxl-job

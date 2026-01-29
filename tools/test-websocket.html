@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+    <meta charset="utf-8">
+</head>
+<body>
+    <h1>Backend.jar WebSocket 测试</h1>
+    
+    <div>
+        <button onclick="testConnection('/cal')">测试 ws://localhost:8080/cal</button>
+        <button onclick="testConnection('/websocket')">测试 ws://localhost:8080/websocket</button>
+        <button onclick="testConnection('/ws')">测试 ws://localhost:8080/ws</button>
+        <button onclick="testConnection('/socket')">测试 ws://localhost:8080/socket</button>
+        <button onclick="testConnection('')">测试 ws://localhost:8080/</button>
+    </div>
+    
+    <div style="margin-top: 20px;">
+        <h3>测试结果:</h3>
+        <div id="results" style="border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto;"></div>
+    </div>
+
+    <script>
+        function log(message) {
+            const results = document.getElementById('results');
+            const time = new Date().toLocaleTimeString();
+            results.innerHTML += `[${time}] ${message}<br>`;
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function testConnection(path) {
+            const url = `ws://localhost:8080${path}`;
+            log(`尝试连接: ${url}`);
+            
+            try {
+                const ws = new WebSocket(url);
+                
+                ws.onopen = function(event) {
+                    log(`✅ ${url} 连接成功!`);
+                    // 发送测试消息
+                    ws.send(JSON.stringify({
+                        type: 'test',
+                        message: 'Hello from WebSocket test'
+                    }));
+                };
+                
+                ws.onmessage = function(event) {
+                    log(`📨 ${url} 收到消息: ${event.data}`);
+                };
+                
+                ws.onerror = function(error) {
+                    log(`❌ ${url} 连接错误: ${error.toString()}`);
+                };
+                
+                ws.onclose = function(event) {
+                    log(`🔒 ${url} 连接关闭: code=${event.code}, reason=${event.reason}`);
+                };
+                
+                // 10秒后关闭连接
+                setTimeout(() => {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.close();
+                    }
+                }, 10000);
+                
+            } catch (error) {
+                log(`💥 ${url} 异常: ${error.toString()}`);
+            }
+        }
+
+        // 页面加载时显示说明
+        window.onload = function() {
+            log('WebSocket测试工具已准备就绪');
+            log('请点击按钮测试不同的WebSocket端点');
+            log('确保 backend.jar 正在 localhost:8080 运行');
+        }
+    </script>
+</body>
+</html>

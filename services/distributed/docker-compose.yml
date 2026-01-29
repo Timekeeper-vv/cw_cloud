@@ -1,0 +1,89 @@
+# 分布式滤波服务编排
+# 启动: docker-compose up -d
+# 停止: docker-compose down
+# 查看日志: docker-compose logs -f
+
+version: '3.3'
+
+services:
+  # 数据分发器
+  dispatcher:
+    build: .
+    command: python dispatcher.py
+    environment:
+      - KAFKA_BROKERS=172.17.0.1:9092
+      - INPUT_TOPIC=sample-input
+      - OUTPUT_TOPIC=distributed-raw
+      - NUM_PARTITIONS=3
+    restart: unless-stopped
+    depends_on:
+      - filter-worker-0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 滤波Worker 0
+  filter-worker-0:
+    build: .
+    command: python filter_worker.py --partition 0 --worker-id filter-worker-0
+    environment:
+      - KAFKA_BROKERS=172.17.0.1:9092
+      - INPUT_TOPIC=distributed-raw
+      - OUTPUT_TOPIC=distributed-filtered
+      - PARTITION_ID=0
+      - WORKER_ID=filter-worker-0
+      - FILTER_ALGORITHM=lms
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 滤波Worker 1
+  filter-worker-1:
+    build: .
+    command: python filter_worker.py --partition 1 --worker-id filter-worker-1
+    environment:
+      - KAFKA_BROKERS=172.17.0.1:9092
+      - INPUT_TOPIC=distributed-raw
+      - OUTPUT_TOPIC=distributed-filtered
+      - PARTITION_ID=1
+      - WORKER_ID=filter-worker-1
+      - FILTER_ALGORITHM=lms
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 滤波Worker 2
+  filter-worker-2:
+    build: .
+    command: python filter_worker.py --partition 2 --worker-id filter-worker-2
+    environment:
+      - KAFKA_BROKERS=172.17.0.1:9092
+      - INPUT_TOPIC=distributed-raw
+      - OUTPUT_TOPIC=distributed-filtered
+      - PARTITION_ID=2
+      - WORKER_ID=filter-worker-2
+      - FILTER_ALGORITHM=lms
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 聚合重排服务
+  aggregator:
+    build: .
+    command: python aggregator.py
+    environment:
+      - KAFKA_BROKERS=172.17.0.1:9092
+      - INPUT_TOPIC=distributed-filtered
+      - OUTPUT_TOPIC=sample-output-distributed
+      - WEBSOCKET_PORT=8082
+      - NUM_PARTITIONS=3
+      - MAX_WAIT_MS=100
+      - BUFFER_SIZE=1000
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+    depends_on:
+      - filter-worker-0
+      - filter-worker-1
+      - filter-worker-2
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

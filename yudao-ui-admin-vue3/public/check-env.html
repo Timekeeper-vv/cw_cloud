@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>环境变量检查</title>
+    <meta charset="utf-8">
+</head>
+<body>
+    <h1>环境变量检查</h1>
+    <div id="info"></div>
+    <script type="module">
+        const info = document.getElementById('info');
+        const envVars = {
+            VITE_BASE_URL: import.meta.env.VITE_BASE_URL,
+            VITE_API_URL: import.meta.env.VITE_API_URL,
+            VITE_DEV: import.meta.env.VITE_DEV,
+            MODE: import.meta.env.MODE,
+            DEV: import.meta.env.DEV,
+            PROD: import.meta.env.PROD
+        };
+        
+        let html = '<h2>当前环境变量:</h2><pre>';
+        html += JSON.stringify(envVars, null, 2);
+        html += '</pre>';
+        
+        html += '<h2>完整BASE_URL:</h2>';
+        html += '<p>' + (import.meta.env.VITE_BASE_URL + import.meta.env.VITE_API_URL) + '</p>';
+        
+        info.innerHTML = html;
+        
+        console.log('Environment Variables:', envVars);
+    </script>
+</body>
+</html>

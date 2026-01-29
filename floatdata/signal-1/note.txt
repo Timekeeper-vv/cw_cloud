@@ -1,0 +1,2 @@
+采样率 100000 Hz ，正弦频率 5 kHz ，幅值 1.0 ，信噪比 10 dB 
+TDMS 文件通道： time_s 、 sine 、 noise 、 sine_plus_noise 

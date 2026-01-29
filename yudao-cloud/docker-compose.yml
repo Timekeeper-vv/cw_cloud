@@ -1,0 +1,194 @@
+version: '3.8'
+
+services:
+  # ===========================================
+  # 基础设施服务
+  # ===========================================
+  
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: yudao-mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: 20041102
+      MYSQL_DATABASE: ruoyi-vue-pro
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql/mysql:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - yudao-network
+
+  # Redis 缓存
+  redis:
+    image: redis:7.0-alpine
+    container_name: yudao-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - yudao-network
+
+  # Nacos 注册中心
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: yudao-nacos
+    restart: always
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    environment:
+      MODE: standalone
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: mysql
+      MYSQL_SERVICE_PORT: 3306
+      MYSQL_SERVICE_DB_NAME: nacos_config
+      MYSQL_SERVICE_USER: root
+      MYSQL_SERVICE_PASSWORD: 20041102
+      JVM_XMS: 256m
+      JVM_XMX: 256m
+    volumes:
+      - nacos_logs:/home/nacos/logs
+    depends_on:
+      - mysql
+    networks:
+      - yudao-network
+
+  # ===========================================
+  # 后端微服务
+  # ===========================================
+
+  # Gateway 网关服务
+  gateway:
+    build:
+      context: .
+      dockerfile: yudao-gateway/Dockerfile
+    container_name: yudao-gateway
+    restart: always
+    ports:
+      - "48080:48080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+    depends_on:
+      - nacos
+      - redis
+    networks:
+      - yudao-network
+
+  # System 系统服务
+  system-server:
+    build:
+      context: .
+      dockerfile: yudao-module-system/yudao-module-system-server/Dockerfile
+    container_name: yudao-system-server
+    restart: always
+    ports:
+      - "48081:48081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: 20041102
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+    depends_on:
+      - mysql
+      - redis
+      - nacos
+    networks:
+      - yudao-network
+
+  # Infra 基础设施服务
+  infra-server:
+    build:
+      context: .
+      dockerfile: yudao-module-infra/yudao-module-infra-server/Dockerfile
+    container_name: yudao-infra-server
+    restart: always
+    ports:
+      - "48082:48082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: 20041102
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+    depends_on:
+      - mysql
+      - redis
+      - nacos
+    networks:
+      - yudao-network
+
+  # Filter 滤波器服务 (新增) - 暂时注释，后续添加
+  # filter-server:
+  #   build:
+  #     context: .
+  #     dockerfile: yudao-module-filter/yudao-module-filter-server/Dockerfile
+  #   container_name: yudao-filter-server
+  #   restart: always
+  #   ports:
+  #     - "48083:48083"
+  #   environment:
+  #     SPRING_PROFILES_ACTIVE: docker
+  #     SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+  #     SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai
+  #     SPRING_DATASOURCE_USERNAME: root
+  #     SPRING_DATASOURCE_PASSWORD: 20041102
+  #     SPRING_REDIS_HOST: redis
+  #     SPRING_REDIS_PORT: 6379
+  #   depends_on:
+  #     - mysql
+  #     - redis
+  #     - nacos
+  #   networks:
+  #     - yudao-network
+
+  # ===========================================
+  # 前端服务
+  # ===========================================
+
+  # 前端管理界面
+  admin-ui:
+    build:
+      context: ../yudao-ui-admin-vue3
+      dockerfile: Dockerfile
+    container_name: yudao-admin-ui
+    restart: always
+    ports:
+      - "3000:80"
+    environment:
+      VITE_BASE_URL: http://gateway:48080
+    depends_on:
+      - gateway
+    networks:
+      - yudao-network
+
+# ===========================================
+# 网络和数据卷配置
+# ===========================================
+
+networks:
+  yudao-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  nacos_logs:
+    driver: local

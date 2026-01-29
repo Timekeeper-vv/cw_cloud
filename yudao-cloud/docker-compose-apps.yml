@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # ===========================================
+  # 后端微服务 - 独立启动
+  # ===========================================
+
+  # Gateway 网关服务
+  gateway:
+    build:
+      context: .
+      dockerfile: yudao-gateway/Dockerfile
+    container_name: yudao-gateway
+    restart: always
+    ports:
+      - "48080:48080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+    external_links:
+      - yudao-nacos:nacos
+      - yudao-redis:redis
+    networks:
+      - yudao-network
+
+  # System 系统服务
+  system-server:
+    build:
+      context: .
+      dockerfile: yudao-module-system/yudao-module-system-server/Dockerfile
+    container_name: yudao-system-server
+    restart: always
+    ports:
+      - "48081:48081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: 20041102
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+    external_links:
+      - yudao-mysql:mysql
+      - yudao-redis:redis
+      - yudao-nacos:nacos
+    networks:
+      - yudao-network
+
+  # Infra 基础设施服务
+  infra-server:
+    build:
+      context: .
+      dockerfile: yudao-module-infra/yudao-module-infra-server/Dockerfile
+    container_name: yudao-infra-server
+    restart: always
+    ports:
+      - "48082:48082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR: nacos:8848
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ruoyi-vue-pro?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: 20041102
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+    external_links:
+      - yudao-mysql:mysql
+      - yudao-redis:redis
+      - yudao-nacos:nacos
+    networks:
+      - yudao-network
+
+networks:
+  yudao-network:
+    external: true

@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # ===========================================
+  # 基础设施服务 - 解决端口冲突的根本方案
+  # ===========================================
+  
+  # MySQL 数据库 - 使用非冲突端口
+  mysql:
+    image: mysql:8.0
+    container_name: yudao-mysql
+    restart: always
+    ports:
+      - "13306:3306"  # 外部端口改为13306
+    environment:
+      MYSQL_ROOT_PASSWORD: 20041102
+      MYSQL_DATABASE: ruoyi-vue-pro
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql/mysql:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - yudao-network
+
+  # Redis 缓存 - 使用非冲突端口
+  redis:
+    image: redis:7.0-alpine
+    container_name: yudao-redis
+    restart: always
+    ports:
+      - "16379:6379"  # 外部端口改为16379
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - yudao-network
+
+  # Nacos 注册中心 - 移除MySQL依赖
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: yudao-nacos
+    restart: always
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    environment:
+      MODE: standalone
+      # 使用内嵌数据库，完全独立
+      JVM_XMS: 256m
+      JVM_XMX: 256m
+    volumes:
+      - nacos_logs:/home/nacos/logs
+      - nacos_data:/home/nacos/data
+    networks:
+      - yudao-network
+
+networks:
+  yudao-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  nacos_logs:
+    driver: local
+  nacos_data:
+    driver: local

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>清除缓存</title>
+</head>
+<body>
+    <h1>清除LocalStorage和SessionStorage</h1>
+    <button onclick="clearCache()">点击清除缓存</button>
+    <div id="result"></div>
+    
+    <script>
+        function clearCache() {
+            try {
+                localStorage.clear();
+                sessionStorage.clear();
+                document.getElementById('result').innerHTML = '<p style="color: green;">✓ 缓存已清除！请关闭此页面并刷新主页面。</p>';
+            } catch (e) {
+                document.getElementById('result').innerHTML = '<p style="color: red;">清除失败: ' + e.message + '</p>';
+            }
+        }
+        
+        // 自动执行
+        window.onload = function() {
+            clearCache();
+        }
+    </script>
+</body>
+</html>

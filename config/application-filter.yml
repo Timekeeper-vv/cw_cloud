@@ -1,0 +1,23 @@
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: backend-filter-group
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: 1
+
+# 应用特定配置
+app:
+  kafka:
+    topics:
+      input: acoustic-emission-signal
+      output: device-filtered-data
+  filter:
+    algorithm: LMS
+    learning-rate: 0.01
+    filter-order: 32

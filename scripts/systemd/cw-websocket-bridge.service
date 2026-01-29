@@ -1,0 +1,27 @@
+[Unit]
+Description=CW Cloud WebSocket Bridge
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/cw-cloud/CW_Cloud
+
+# 启动前清理：只杀占用 8081 端口的进程
+ExecStartPre=-/usr/bin/fuser -k 8081/tcp
+ExecStartPre=/bin/sleep 2
+
+ExecStart=/usr/bin/node /opt/cw-cloud/CW_Cloud/services/websocket-bridge.js
+Restart=always
+RestartSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cw-websocket
+
+Environment=NODE_ENV=production
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

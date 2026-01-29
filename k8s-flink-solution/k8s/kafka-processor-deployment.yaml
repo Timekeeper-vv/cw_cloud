@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: filter-kafka-processor
+  namespace: signal-processing
+  labels:
+    app: filter-kafka-processor
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: filter-kafka-processor
+  template:
+    metadata:
+      labels:
+        app: filter-kafka-processor
+    spec:
+      containers:
+      - name: filter-processor
+        image: filter-gateway:latest
+        imagePullPolicy: IfNotPresent
+        command: ["python", "filter_gateway.py", "--mode", "kafka"]
+        env:
+        - name: KALMAN_SERVICE_URL
+          value: "http://49.235.44.231:8000"
+        - name: RLS_SERVICE_URL
+          value: "http://49.235.44.231:8001"
+        - name: LS_SERVICE_URL
+          value: "http://49.235.44.231:8002"
+        - name: KAFKA_BROKERS
+          value: "kafka-service:9092"
+        - name: INPUT_TOPIC
+          value: "sample-input"
+        - name: OUTPUT_TOPIC
+          value: "sample-output"
+        - name: FILTER_TYPE
+          value: "kalman"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "500m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: filter-processor-hpa
+  namespace: signal-processing
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: filter-kafka-processor
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 60

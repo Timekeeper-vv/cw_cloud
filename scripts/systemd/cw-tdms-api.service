@@ -1,0 +1,26 @@
+[Unit]
+Description=CW Cloud TDMS API Server
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/cw-cloud/CW_Cloud
+ExecStart=/usr/bin/node /opt/cw-cloud/CW_Cloud/services/tdms-api-server.js
+Restart=always
+RestartSec=3
+
+# 日志
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cw-tdms-api
+
+# 环境变量
+Environment=NODE_ENV=production
+
+# 资源限制
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

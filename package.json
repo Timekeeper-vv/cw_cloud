@@ -1,0 +1,28 @@
+{
+  "name": "cw-cloud-websocket-bridge",
+  "version": "1.0.0",
+  "description": "WebSocket Bridge for CW_Cloud real-time data streaming",
+  "main": "websocket-bridge.js",
+  "scripts": {
+    "start": "node websocket-bridge.js",
+    "dev": "nodemon websocket-bridge.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "kafkajs": "^2.2.4",
+    "mysql2": "^3.15.3",
+    "ws": "^8.14.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "websocket",
+    "kafka",
+    "real-time",
+    "bridge"
+  ],
+  "author": "CW_Cloud Team",
+  "license": "MIT"
+}

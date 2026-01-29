@@ -1,0 +1,189 @@
+# ==========================================
+# 芋道工业健康监测平台 - Git忽略文件
+# ==========================================
+
+# ========== Java / Maven ==========
+# 编译输出
+**/target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# 日志文件
+**/logs/
+*.log
+*.log.*
+
+# ========== Node.js / Frontend ==========
+# 依赖
+**/node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# 构建输出
+**/dist/
+
+# 排除构建产物，但保留前端构建配置
+**/build/
+!yudao-ui-admin-vue3/build/
+
+# 前端缓存
+.vite/
+.nuxt/
+.cache/
+.temp/
+
+# ========== Nacos ==========
+# Nacos运行数据（会在启动时自动下载）
+**/nacos/
+nacos-server-*.zip
+
+# ========== 数据库 ==========
+# 数据库连接配置（敏感信息）
+# 保留模板文件，但忽略实际配置
+**/*-local.yaml
+!**/*-local.yaml.template
+
+# 数据库备份文件
+*.sql.backup
+*.dump
+
+# ========== IDE ==========
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Eclipse
+.project
+.classpath
+.settings/
+bin/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# NetBeans
+nbproject/
+
+# ========== 操作系统 ==========
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+
+# ========== 临时文件 ==========
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# 备份文件
+*.bak
+*.backup
+*.old
+
+# ========== 个人配置 ==========
+# 本地环境变量
+.env.local
+.env.*.local
+
+# 个人笔记
+NOTES.md
+TODO.md
+私人笔记.md
+
+# ========== 敏感信息 ==========
+# 密码和密钥
+**/passwords.txt
+**/secrets.txt
+*.pem
+*.key
+*.crt
+
+# ========== 运行时文件 ==========
+# 进程ID
+*.pid
+
+# 临时数据
+**/temp/
+**/tmp/
+
+# ========== 特定项目忽略 ==========
+# Windows用户目录下的日志
+# C:\Users\*\logs\ 会在运行时生成
+
+# 编译时生成的Nacos配置
+application.properties.bak
+
+# 前端环境检查页面的输出
+**/check-env-output.txt
+
+# ========== Kafka & Zookeeper ==========
+# Kafka压缩包（可重新下载）
+kafka_*.zip
+kafka*.tar.gz
+
+# Kafka/Zookeeper运行时数据（会自动生成）
+**/data/kafka-logs/
+**/data/zookeeper/
+
+# Kafka日志
+kafka/logs/
+**/kafka/logs/
+
+# ========== 下载的压缩包 ==========
+# 可重新下载的依赖包
+*.zip
+*.tar.gz
+*.tgz
+
+# ========== TDMS数据文件（保留）==========
+# TDMS测试数据是项目必需的，不忽略
+# floatdata/data/*.tdms 保持可提交
+
+# ========== 保留重要文件 ==========
+# 确保这些文件会被提交
+!.gitignore
+!README.md
+!*.bat
+!*.md
+!*.sql
+!pom.xml
+!package.json
+
+# 保留源代码目录结构
+!**/src/
+!**/public/
+
+# 保留TDMS测试数据（虽然*.zip被忽略，但TDMS数据必须保留）
+!floatdata/data/*.tdms
+!floatdata/signal-1/*.tdms
+!floatdata/signal-2/*.tdms
+
+# 保留Kafka库文件（项目必需）
+!kafka/libs/*.jar
+
+# ========== FloatData Python脚本 ==========
+# 保留必要的Python分析脚本
+!floatdata/floatdata-streaming/*.py
+!floatdata/floatdata-streaming/requirements*.txt

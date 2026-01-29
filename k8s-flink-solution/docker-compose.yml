@@ -1,0 +1,116 @@
+# 分布式滤波解决方案 - Docker Compose 部署 (精简版)
+# 使用现有 Kafka (localhost:9092)，不依赖 Flink
+
+version: '3.3'
+
+services:
+  # ============== 滤波网关服务 ==============
+  
+  filter-gateway:
+    build:
+      context: ./docker/filter-gateway
+      dockerfile: Dockerfile
+    container_name: filter-gateway
+    ports:
+      - "8010:8010"
+    environment:
+      - KALMAN_SERVICE_URL=http://49.235.44.231:8000
+      - RLS_SERVICE_URL=http://49.235.44.231:8001
+      - LS_SERVICE_URL=http://49.235.44.231:8002
+      - KAFKA_BROKERS=host.docker.internal:9092
+      - INPUT_TOPIC=sample-input
+      - OUTPUT_TOPIC=distributed-filtered
+    networks:
+      - signal-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # ============== Kafka 滤波处理器 (多实例) ==============
+  # 从 sample-input 读取原始数据，调用盛老师API滤波，输出到 distributed-filtered
+  
+  filter-processor-1:
+    build:
+      context: ./docker/filter-gateway
+      dockerfile: Dockerfile
+    container_name: filter-processor-1
+    environment:
+      - KALMAN_SERVICE_URL=http://49.235.44.231:8000
+      - RLS_SERVICE_URL=http://49.235.44.231:8001
+      - LS_SERVICE_URL=http://49.235.44.231:8002
+      - KAFKA_BROKERS=host.docker.internal:9092
+      - INPUT_TOPIC=sample-input
+      - OUTPUT_TOPIC=distributed-filtered
+      - FILTER_TYPE=kalman
+      - WORKER_ID=filter-worker-0
+    networks:
+      - signal-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["python", "filter_gateway.py", "--mode", "kafka"]
+    restart: unless-stopped
+
+  filter-processor-2:
+    build:
+      context: ./docker/filter-gateway
+      dockerfile: Dockerfile
+    container_name: filter-processor-2
+    environment:
+      - KALMAN_SERVICE_URL=http://49.235.44.231:8000
+      - RLS_SERVICE_URL=http://49.235.44.231:8001
+      - LS_SERVICE_URL=http://49.235.44.231:8002
+      - KAFKA_BROKERS=host.docker.internal:9092
+      - INPUT_TOPIC=sample-input
+      - OUTPUT_TOPIC=distributed-filtered
+      - FILTER_TYPE=kalman
+      - WORKER_ID=filter-worker-1
+    networks:
+      - signal-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["python", "filter_gateway.py", "--mode", "kafka"]
+    restart: unless-stopped
+
+  filter-processor-3:
+    build:
+      context: ./docker/filter-gateway
+      dockerfile: Dockerfile
+    container_name: filter-processor-3
+    environment:
+      - KALMAN_SERVICE_URL=http://49.235.44.231:8000
+      - RLS_SERVICE_URL=http://49.235.44.231:8001
+      - LS_SERVICE_URL=http://49.235.44.231:8002
+      - KAFKA_BROKERS=host.docker.internal:9092
+      - INPUT_TOPIC=sample-input
+      - OUTPUT_TOPIC=distributed-filtered
+      - FILTER_TYPE=kalman
+      - WORKER_ID=filter-worker-2
+    networks:
+      - signal-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["python", "filter_gateway.py", "--mode", "kafka"]
+    restart: unless-stopped
+
+  # ============== WebSocket 桥接 ==============
+  
+  websocket-bridge-distributed:
+    build:
+      context: ./docker/websocket-bridge
+      dockerfile: Dockerfile
+    container_name: websocket-bridge-distributed
+    ports:
+      - "8085:8083"  # 分布式专用 WebSocket 端口
+    environment:
+      - KAFKA_BROKERS=host.docker.internal:9092
+      - INPUT_TOPIC=distributed-filtered
+      - WS_PORT=8083
+    networks:
+      - signal-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+networks:
+  signal-network:
+    driver: bridge

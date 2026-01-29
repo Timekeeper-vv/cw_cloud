@@ -1,0 +1,123 @@
+
+# 查看更多 .gitignore 配置 -> https://help.github.com/articles/ignoring-files/
+
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+.flattened-pom.xml
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+*.class
+target/*
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+/build/
+
+### admin-web ###
+
+# dependencies
+**/node_modules
+
+# roadhog-api-doc ignore
+/src/utils/request-temp.js
+_roadhog-api-doc
+
+# production
+/dist
+/.vscode
+
+# misc
+.DS_Store
+npm-debug.log*
+yarn-error.log
+
+/coverage
+.idea
+yarn.lock
+package-lock.json
+*bak
+.vscode
+
+# visual studio code
+.history
+*.log
+
+functions/mock
+.temp/**
+
+# umi
+.umi
+.umi-production
+
+# screenshot
+screenshot
+.firebase
+sessionStore
+
+### 工业监测平台特定文件 ###
+
+# 进程ID文件
+*.pid
+
+# 日志文件
+logs/
+*.log
+/tmp/*.log
+
+# 备份文件
+*.backup
+*.old
+*_new.vue
+*_new.*
+
+# 临时文件
+*.tmp
+test_*.txt
+test_direct_write.txt
+
+# 编译的Java class文件
+SimpleFilterServer.class
+SimpleLMSFilter.class
+FilterHandler.class
+AnomalyDetectionHandler*.class
+HealthHandler.class
+SimpleFilterTest.class
+
+# Python相关
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# 测试和临时文件
+test-*.py
+comprehensive_integration_test.py
+mock_api.py
+parse_docs.py
+integration_test_results.json
+
+# 数据文件
+*.csv
+*.swae
+
+# SQL临时文件
+insert_iot_menus.sql
+*_temp.sql

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>清除缓存并重新登录</title>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #409eff;
+            margin-bottom: 20px;
+        }
+        button {
+            background: #409eff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #66b1ff;
+        }
+        .success {
+            background: #67c23a;
+        }
+        .info {
+            background: #f4f4f5;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+            color: #606266;
+        }
+        .step {
+            margin: 10px 0;
+            padding: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 清除缓存并重新登录</h1>
+        
+        <div class="info">
+            <strong>为什么需要清除缓存？</strong>
+            <p>当您在后台添加新菜单或修改权限后，这些数据会被缓存在浏览器中。清除缓存可以让系统重新加载最新的菜单数据。</p>
+        </div>
+
+        <div class="step">
+            <strong>步骤 1:</strong> 点击下面的按钮清除所有缓存
+        </div>
+        <button onclick="clearCache()">清除所有缓存</button>
+
+        <div class="step">
+            <strong>步骤 2:</strong> 返回登录页面重新登录
+        </div>
+        <button class="success" onclick="goToLogin()">前往登录页</button>
+
+        <div id="result" style="margin-top: 20px; color: #67c23a; font-weight: bold;"></div>
+
+        <div class="info" style="margin-top: 20px;">
+            <strong>提示：</strong>
+            <ul>
+                <li>清除缓存后，您需要重新登录</li>
+                <li>登录后会自动加载最新的菜单数据</li>
+                <li>如果菜单还是没有显示，请检查菜单权限配置</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function clearCache() {
+            // 清除 LocalStorage
+            localStorage.clear();
+            // 清除 SessionStorage
+            sessionStorage.clear();
+            
+            document.getElementById('result').innerHTML = '✅ 缓存已清除！请点击"前往登录页"重新登录';
+            
+            console.log('已清除所有缓存数据');
+        }
+
+        function goToLogin() {
+            window.location.href = '/login';
+        }
+    </script>
+</body>
+</html>

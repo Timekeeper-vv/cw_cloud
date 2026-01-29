@@ -1,0 +1,22 @@
+[Unit]
+Description=CW Cloud TDMS Signal Producer
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/cw-cloud/CW_Cloud
+ExecStart=/usr/bin/python3 -u /opt/cw-cloud/CW_Cloud/services/tdms-signal-producer.py
+Restart=always
+RestartSec=3
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cw-signal-producer
+
+Environment=PYTHONUNBUFFERED=1
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target
