@@ -88,56 +88,111 @@
       </el-card>
     </div>
 
-    <div class="toolbar">
-      <div class="anomaly-config">
-        <span>异常阈值系数：</span>
-        <el-slider
-          v-model="thresholdFactor"
-          :min="0.5"
-          :max="2"
-          :step="0.05"
-          show-input
-          style="width: 260px"
-        />
-        <span class="threshold-text">当前：{{ thresholdFactor.toFixed(2) }} × 95% 分位数</span>
-        <el-button
-          type="danger"
-          size="small"
-          :disabled="!analysisResult || analyzing"
-          @click="handleDetectAnomaly"
-        >
-          异常检测
-        </el-button>
-        <span class="divider"></span>
-        <span>滤波器：</span>
-        <el-select v-model="filterType" size="small" style="width: 220px">
-          <el-option label="卡尔曼滤波 (Kalman)" value="KALMAN" />
-          <el-option label="LMS 自适应滤波" value="LMS" />
-        </el-select>
-        <template v-if="filterType === 'KALMAN'">
-          <span class="divider"></span>
-          <span>Q</span>
-          <el-input-number v-model="kalmanParams.kalmanQ" :min="0" :step="1e-5" size="small" />
-          <span>R</span>
-          <el-input-number v-model="kalmanParams.kalmanR" :min="0" :step="0.01" size="small" />
-          <span>P0</span>
-          <el-input-number v-model="kalmanParams.kalmanP0" :min="0" :step="0.1" size="small" />
-          <span>x0-N</span>
-          <el-input-number v-model="kalmanParams.kalmanX0N" :min="1" :max="100" :step="1" size="small" />
-        </template>
+    <!-- 配置面板 -->
+    <el-card class="config-card" shadow="hover">
+      <template #header>
+        <div class="card-header">
+          <span>分析配置</span>
+        </div>
+      </template>
+      <div class="config-content">
+        <div class="config-row">
+          <div class="config-item">
+            <span class="config-label">异常检测算法：</span>
+            <el-select v-model="anomalyAlgorithm" size="default" style="width: 280px" placeholder="选择异常检测算法">
+              <el-option label="3σ 动态阈值法（推荐）" value="3sigma">
+                <div class="algorithm-option">
+                  <span class="algorithm-name">3σ 动态阈值法</span>
+                  <el-tag type="success" size="small" effect="plain">推荐</el-tag>
+                </div>
+              </el-option>
+              <el-option label="分位数阈值法" value="quantile">
+                <div class="algorithm-option">
+                  <span class="algorithm-name">分位数阈值法</span>
+                </div>
+              </el-option>
+            </el-select>
+            <el-tooltip content="3σ动态阈值法：基于统计学的三倍标准差方法，自动计算动态阈值" placement="top">
+              <el-icon class="info-icon"><QuestionFilled /></el-icon>
+            </el-tooltip>
+          </div>
+          <div class="config-item" v-if="anomalyAlgorithm === 'quantile'">
+            <span class="config-label">异常阈值系数：</span>
+            <el-slider
+              v-model="thresholdFactor"
+              :min="0.5"
+              :max="2"
+              :step="0.05"
+              show-input
+              style="width: 260px"
+            />
+            <span class="threshold-text">当前：{{ thresholdFactor.toFixed(2) }} × 95% 分位数</span>
+          </div>
+          <div class="config-item" v-if="anomalyAlgorithm === '3sigma'">
+            <span class="config-label">标准差倍数：</span>
+            <el-slider
+              v-model="sigmaMultiplier"
+              :min="2"
+              :max="4"
+              :step="0.1"
+              show-input
+              style="width: 260px"
+            />
+            <span class="threshold-text">当前：{{ sigmaMultiplier.toFixed(1) }}σ</span>
+          </div>
+        </div>
+        <el-divider />
+        <div class="config-row">
+          <div class="config-item">
+            <span class="config-label">滤波器：</span>
+            <el-select v-model="filterType" size="default" style="width: 220px">
+              <el-option label="卡尔曼滤波 (Kalman)" value="KALMAN" />
+              <el-option label="LMS 自适应滤波" value="LMS" />
+            </el-select>
+          </div>
+          <template v-if="filterType === 'KALMAN'">
+            <div class="config-item">
+              <span class="config-label">Q：</span>
+              <el-input-number v-model="kalmanParams.kalmanQ" :min="0" :step="1e-5" size="default" style="width: 120px" />
+            </div>
+            <div class="config-item">
+              <span class="config-label">R：</span>
+              <el-input-number v-model="kalmanParams.kalmanR" :min="0" :step="0.01" size="default" style="width: 120px" />
+            </div>
+            <div class="config-item">
+              <span class="config-label">P0：</span>
+              <el-input-number v-model="kalmanParams.kalmanP0" :min="0" :step="0.1" size="default" style="width: 120px" />
+            </div>
+            <div class="config-item">
+              <span class="config-label">x0-N：</span>
+              <el-input-number v-model="kalmanParams.kalmanX0N" :min="1" :max="100" :step="1" size="default" style="width: 120px" />
+            </div>
+          </template>
+        </div>
       </div>
-      <div class="right-side">
-        <div class="anomaly-summary" v-if="analysisResult">
-          当前异常点：<span class="count">{{ analysisResult.anomalyCount }}</span>
-        </div>
-        <div class="controls">
-          <el-button type="primary" :disabled="!canAnalyze || analyzing" :loading="analyzing" @click="handleAnalyze">
-            开始分析
-          </el-button>
-          <el-button type="success" :disabled="!analysisResult" @click="downloadPng">
-            下载图片
-          </el-button>
-        </div>
+    </el-card>
+
+    <!-- 操作工具栏 -->
+    <div class="toolbar">
+      <div class="anomaly-summary" v-if="analysisResult">
+        <el-tag type="info" size="large">
+          <span class="summary-label">异常点数量：</span>
+          <span class="count">{{ analysisResult.anomalyCount }}</span>
+        </el-tag>
+      </div>
+      <div class="controls">
+        <el-button type="primary" size="default" :disabled="!canAnalyze || analyzing" :loading="analyzing" @click="handleAnalyze">
+          <el-icon><VideoPlay /></el-icon>
+          <span>开始分析</span>
+        </el-button>
+        <el-button type="danger" size="default" :disabled="!analysisResult || analyzing" @click="handleDetectAnomaly">
+          <el-icon><Warning /></el-icon>
+          <span>重新检测异常</span>
+        </el-button>
+        <el-button type="success" size="default" :disabled="!analysisResult" @click="downloadPng">
+          <el-icon><Download /></el-icon>
+          <span>下载图片</span>
+        </el-button>
       </div>
     </div>
 
@@ -198,7 +253,7 @@ import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import { UploadFile, UploadRequestOptions } from 'element-plus/es/components/upload'
 import { analyzeTdmsHistory, type HistoryAnalysisResult, type FilterType, type KalmanParams } from '@/api/monitor'
-import { UploadFilled, VideoPlay, VideoPause } from '@element-plus/icons-vue'
+import { UploadFilled, VideoPlay, VideoPause, QuestionFilled, Warning, Download } from '@element-plus/icons-vue'
 
 const signal1Files = ref<UploadFile[]>([])
 const signal2Files = ref<UploadFile[]>([])
@@ -207,6 +262,10 @@ const singleFile = ref<UploadFile | null>(null)
 const analyzing = ref(false)
 const thresholdFactor = ref(1.5)
 const analysisResult = ref<HistoryAnalysisResult | null>(null)
+
+// 异常检测算法选择
+const anomalyAlgorithm = ref<'3sigma' | 'quantile'>('3sigma')
+const sigmaMultiplier = ref(3.0) // 3σ倍数，默认3.0
 
 // 滤波器选择：默认卡尔曼；切换后会重新触发分析/异常检测
 const filterType = ref<FilterType>('KALMAN')
@@ -309,15 +368,67 @@ const initCharts = () => {
     dom: HTMLDivElement | null,
     legend: string[],
     isCompareChart = false,
-    lineColor = '#409EFF' // 默认蓝色
+    lineColor = '#409EFF', // 默认蓝色
+    showAnomaly = false // 是否显示异常点
   ) => {
     if (!dom) return null
     const instance = echarts.init(dom)
+    const baseSeries = isCompareChart
+      ? [
+          {
+            name: legend[0],
+            type: 'line',
+            showSymbol: true,
+            symbol: 'circle',
+            symbolSize: 4,
+            smooth: true,
+            lineStyle: { width: 1.4, color: '#409EFF' },
+            itemStyle: { color: '#409EFF' },
+            data: []
+          },
+          {
+            name: legend[1],
+            type: 'line',
+            showSymbol: true,
+            symbol: 'circle',
+            symbolSize: 4,
+            smooth: true,
+            lineStyle: { width: 1.4, color: '#67C23A' },
+            itemStyle: { color: '#67C23A' },
+            data: []
+          }
+        ]
+      : [
+          {
+            name: legend[0],
+            type: 'line',
+            showSymbol: true,
+            symbol: 'circle',
+            symbolSize: 4,
+            smooth: true,
+            lineStyle: { width: 1.4, color: lineColor },
+            itemStyle: { color: lineColor },
+            data: []
+          }
+        ]
+    
+    // 如果需要显示异常点，添加异常点散点图
+    if (showAnomaly && !isCompareChart) {
+      baseSeries.push({
+        name: '异常点',
+        type: 'scatter',
+        symbol: 'diamond',
+        symbolSize: 8,
+        itemStyle: { color: '#F56C6C' },
+        data: []
+      } as any)
+    }
+    
     instance.setOption({
-      // 和实时检测页面尽量保持一致的“连续曲线”视觉效果
+      // 和实时检测页面尽量保持一致的"连续曲线"视觉效果
       animation: false,
       tooltip: { trigger: 'axis' },
-      legend: { data: legend },
+      legend: { data: showAnomaly && !isCompareChart ? [...legend, '异常点'] : legend },
       grid: { left: 50, right: 20, top: 20, bottom: 30 },
       xAxis: {
         type: 'value', // 使用 value 类型，表示窗口内索引
@@ -332,51 +443,14 @@ const initCharts = () => {
         name: unit
       },
       // 历史分析波形：每个样本点以点显示，然后用平滑曲线连接
-      series: isCompareChart
-        ? [
-            {
-              name: legend[0],
-              type: 'line',
-              showSymbol: true,
-              symbol: 'circle',
-              symbolSize: 4,
-              smooth: true,
-              lineStyle: { width: 1.4, color: '#409EFF' },
-              itemStyle: { color: '#409EFF' },
-              data: []
-            },
-            {
-              name: legend[1],
-              type: 'line',
-              showSymbol: true,
-              symbol: 'circle',
-              symbolSize: 4,
-              smooth: true,
-              lineStyle: { width: 1.4, color: '#67C23A' },
-              itemStyle: { color: '#67C23A' },
-              data: []
-            }
-          ]
-        : [
-            {
-              name: legend[0],
-              type: 'line',
-              showSymbol: true,
-              symbol: 'circle',
-              symbolSize: 4,
-              smooth: true,
-              lineStyle: { width: 1.4, color: lineColor },
-              itemStyle: { color: lineColor },
-              data: []
-            }
-          ]
+      series: baseSeries
     })
     return instance
   }
 
-  chartRaw.value = initOne(chartRawRef.value, ['原始信号'], false, '#409EFF') as echarts.ECharts // 蓝色
-  chartFiltered.value = initOne(chartFilteredRef.value, ['滤波信号'], false, '#67C23A') as echarts.ECharts // 绿色
-  chartResidual.value = initOne(chartResidualRef.value, ['残差信号'], false, '#E6A23C') as echarts.ECharts // 橙色
+  chartRaw.value = initOne(chartRawRef.value, ['原始信号'], false, '#409EFF', true) as echarts.ECharts // 蓝色，显示异常点
+  chartFiltered.value = initOne(chartFilteredRef.value, ['滤波信号'], false, '#67C23A', true) as echarts.ECharts // 绿色，显示异常点
+  chartResidual.value = initOne(chartResidualRef.value, ['残差信号'], false, '#E6A23C', true) as echarts.ECharts // 橙色，显示异常点
   chartCompare.value = initOne(chartCompareRef.value, ['原始信号', '滤波信号'], true) as echarts.ECharts
 }
 
@@ -394,20 +468,25 @@ const renderFull = () => {
   const rawData = windowPts.map((p, i) => [i, p.rawValue])
   const filteredData = windowPts.map((p, i) => [i, p.filteredValue])
   const residualData = windowPts.map((p, i) => [i, p.residualValue])
+  
+  // 异常点数据（只显示异常点）
+  const rawAnomalyData = windowPts.map((p, i) => p.isAnomaly ? [i, p.rawValue] : null).filter(Boolean) as [number, number][]
+  const filteredAnomalyData = windowPts.map((p, i) => p.isAnomaly ? [i, p.filteredValue] : null).filter(Boolean) as [number, number][]
+  const residualAnomalyData = windowPts.map((p, i) => p.isAnomaly ? [i, p.residualValue] : null).filter(Boolean) as [number, number][]
 
   const xAxisRange = { min: 0, max: Math.max(win - 1, 0) }
 
   chartRaw.value?.setOption({
     xAxis: xAxisRange,
-    series: [{ data: rawData }]
+    series: [{ data: rawData }, { data: rawAnomalyData }]
   })
   chartFiltered.value?.setOption({
     xAxis: xAxisRange,
-    series: [{ data: filteredData }]
+    series: [{ data: filteredData }, { data: filteredAnomalyData }]
   })
   chartResidual.value?.setOption({
     xAxis: xAxisRange,
-    series: [{ data: residualData }]
+    series: [{ data: residualData }, { data: residualAnomalyData }]
   })
   chartCompare.value?.setOption({
     xAxis: xAxisRange,
@@ -431,25 +510,82 @@ const renderByIndex = (idx: number) => {
   const rawData = windowPts.map((p, i) => [i, p.rawValue])
   const filteredData = windowPts.map((p, i) => [i, p.filteredValue])
   const residualData = windowPts.map((p, i) => [i, p.residualValue])
+  
+  // 异常点数据（只显示异常点）
+  const rawAnomalyData = windowPts.map((p, i) => p.isAnomaly ? [i, p.rawValue] : null).filter(Boolean) as [number, number][]
+  const filteredAnomalyData = windowPts.map((p, i) => p.isAnomaly ? [i, p.filteredValue] : null).filter(Boolean) as [number, number][]
+  const residualAnomalyData = windowPts.map((p, i) => p.isAnomaly ? [i, p.residualValue] : null).filter(Boolean) as [number, number][]
 
   const xAxisRange = { min: 0, max: Math.max(win - 1, 0) }
 
   chartRaw.value?.setOption({
     xAxis: xAxisRange,
-    series: [{ data: rawData }]
+    series: [{ data: rawData }, { data: rawAnomalyData }]
   })
   chartFiltered.value?.setOption({
     xAxis: xAxisRange,
-    series: [{ data: filteredData }]
+    series: [{ data: filteredData }, { data: filteredAnomalyData }]
   })
   chartResidual.value?.setOption({
     xAxis: xAxisRange,
-    series: [{ data: residualData }]
+    series: [{ data: residualData }, { data: residualAnomalyData }]
   })
   chartCompare.value?.setOption({
     xAxis: xAxisRange,
     series: [{ data: rawData }, { data: filteredData }]
   })
+}
+
+// 3σ动态阈值法异常检测
+const detectAnomaly3Sigma = (points: HistoryAnalysisPoint[], multiplier: number = 3.0) => {
+  if (!points.length) return
+  
+  // 计算残差序列的均值和标准差
+  const residuals = points.map(p => p.residualValue)
+  const mean = residuals.reduce((sum, val) => sum + val, 0) / residuals.length
+  const variance = residuals.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / residuals.length
+  const stdDev = Math.sqrt(variance)
+  
+  // 动态阈值：均值 ± multiplier * 标准差
+  const upperThreshold = mean + multiplier * stdDev
+  const lowerThreshold = mean - multiplier * stdDev
+  
+  // 标记异常点
+  let anomalyCount = 0
+  points.forEach(point => {
+    const isAnomaly = point.residualValue > upperThreshold || point.residualValue < lowerThreshold
+    point.isAnomaly = isAnomaly
+    if (isAnomaly) {
+      anomalyCount++
+      point.anomalyType = '3sigma'
+    }
+  })
+  
+  return anomalyCount
+}
+
+// 分位数阈值法异常检测
+const detectAnomalyQuantile = (points: HistoryAnalysisPoint[], factor: number = 1.5) => {
+  if (!points.length) return
+  
+  // 计算残差序列的95%分位数
+  const residuals = points.map(p => Math.abs(p.residualValue)).sort((a, b) => a - b)
+  const quantile95Index = Math.floor(residuals.length * 0.95)
+  const quantile95 = residuals[quantile95Index] || residuals[residuals.length - 1]
+  const threshold = quantile95 * factor
+  
+  // 标记异常点
+  let anomalyCount = 0
+  points.forEach(point => {
+    const isAnomaly = Math.abs(point.residualValue) > threshold
+    point.isAnomaly = isAnomaly
+    if (isAnomaly) {
+      anomalyCount++
+      point.anomalyType = 'quantile'
+    }
+  })
+  
+  return anomalyCount
 }
 
 const handleAnalyze = async () => {
@@ -465,7 +601,16 @@ const handleAnalyze = async () => {
       ElMessage.warning('未解析到有效样本')
       return
     }
-    // 不做前端“改数据”平滑：只负责用固定窗口索引映射渲染，保证曲线连续、不分叉
+    
+    // 应用异常检测算法
+    if (anomalyAlgorithm.value === '3sigma') {
+      resp.anomalyCount = detectAnomaly3Sigma(resp.points, sigmaMultiplier.value)
+      ElMessage.success(`分析完成，使用3σ动态阈值法检测到 ${resp.anomalyCount} 个异常点`)
+    } else {
+      resp.anomalyCount = detectAnomalyQuantile(resp.points, thresholdFactor.value)
+      ElMessage.success(`分析完成，使用分位数阈值法检测到 ${resp.anomalyCount} 个异常点`)
+    }
+    
     analysisResult.value = resp
 
     initCharts()
@@ -474,7 +619,6 @@ const handleAnalyze = async () => {
     renderFull()
     // 默认不自动播放，由用户点击播放按钮控制
     playing.value = false
-    ElMessage.success('分析完成')
   } catch (e: any) {
     ElMessage.error(e?.message || '分析失败')
   } finally {
@@ -482,7 +626,7 @@ const handleAnalyze = async () => {
   }
 }
 
-// 仅重新按当前阈值做异常检测，并刷新右上角“当前异常点”数量；波形样式保持不变
+// 仅重新按当前算法和参数做异常检测，并刷新右上角"当前异常点"数量；波形样式保持不变
 const handleDetectAnomaly = async () => {
   if (!analysisResult.value) {
     ElMessage.warning('请先完成一次信号分析')
@@ -490,17 +634,17 @@ const handleDetectAnomaly = async () => {
   }
   analyzing.value = true
   try {
-    const form = buildFormData()
-    const resp = await analyzeTdmsHistory(form, { filterType: filterType.value, ...kalmanParams })
-    if (!resp.points.length) {
-      ElMessage.warning('未解析到有效样本')
-      return
+    // 重新应用异常检测算法
+    if (anomalyAlgorithm.value === '3sigma') {
+      analysisResult.value.anomalyCount = detectAnomaly3Sigma(analysisResult.value.points, sigmaMultiplier.value)
+      ElMessage.success(`异常检测完成，使用3σ动态阈值法检测到 ${analysisResult.value.anomalyCount} 个异常点`)
+    } else {
+      analysisResult.value.anomalyCount = detectAnomalyQuantile(analysisResult.value.points, thresholdFactor.value)
+      ElMessage.success(`异常检测完成，使用分位数阈值法检测到 ${analysisResult.value.anomalyCount} 个异常点`)
     }
-    // 只更新结果数据（包括 isAnomaly 和 anomalyCount），波形仍然由 renderByIndex 控制显示
-    analysisResult.value = resp
+    
     // 重新按当前播放位置渲染一遍窗口
     renderByIndex(playIndex.value)
-    ElMessage.success('异常检测完成')
   } catch (e: any) {
     ElMessage.error(e?.message || '异常检测失败')
   } finally {
@@ -652,28 +796,86 @@ const downloadPng = () => {
 .file-item .size {
   color: var(--el-text-color-secondary);
 }
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
+.config-card {
+  margin-bottom: 16px;
 }
-.anomaly-config {
+.config-content {
+  padding: 8px 0;
+}
+.config-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.config-row:last-child {
+  margin-bottom: 0;
+}
+.config-item {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.right-side {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.config-label {
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+  white-space: nowrap;
+  min-width: fit-content;
 }
 .threshold-text {
+  font-size: 13px;
   color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+.info-icon {
+  color: var(--el-color-info);
+  cursor: help;
+  font-size: 16px;
+}
+.algorithm-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.algorithm-name {
+  flex: 1;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--el-bg-color-page);
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.anomaly-summary {
+  display: flex;
+  align-items: center;
+}
+.summary-label {
+  font-size: 14px;
+  margin-right: 4px;
 }
 .anomaly-summary .count {
   color: var(--el-color-danger);
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 18px;
+  margin-left: 4px;
+}
+.controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.controls .el-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .chart-grid {
   margin-top: 8px;
