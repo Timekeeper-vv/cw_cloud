@@ -55,6 +55,12 @@
             <artifactId>springdoc-openapi-ui</artifactId>
         </dependency>
 
+        <!-- Reactor for reactive streams (Flux) -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-core</artifactId>
+        </dependency>
+
         <!-- Apache Flink for embedded replay-style streaming -->
         <dependency>
             <groupId>org.apache.flink</groupId>
@@ -92,13 +98,13 @@
 
     <build>
         <plugins>
-            <!-- 与 Flink 要求保持一致 -->
+            <!-- 与 Flink 1.18.x 要求保持一致：需要 JDK 21 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
+                    <source>21</source>
+                    <target>21</target>
                 </configuration>
             </plugin>
         </plugins>

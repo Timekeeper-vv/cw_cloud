@@ -20,6 +20,15 @@ export default ({command, mode}: ConfigEnv): UserConfig => {
     } else {
         env = loadEnv(mode, root)
     }
+    
+    // 开发环境调试：打印代理配置
+    if (!isBuild) {
+        console.log('[Vite Config] 代理配置:');
+        console.log('  VITE_BASE_URL:', env.VITE_BASE_URL || 'http://localhost:48080');
+        console.log('  VITE_API_URL:', env.VITE_API_URL);
+        console.log('  代理规则: /admin-api ->', env.VITE_BASE_URL || 'http://localhost:48080');
+    }
+    
     return {
         base: env.VITE_BASE_PATH,
         root: root,
@@ -30,18 +39,63 @@ export default ({command, mode}: ConfigEnv): UserConfig => {
             open: env.VITE_OPEN === 'true',
             // 本地跨域代理
             proxy: {
-              // 监控模块（历史分析 / 实时检测）的接口，开发环境直连 monitor-server，避免依赖网关路由配置
-              // 注意：当前 monitor-server 的接口前缀就是 /admin-api（从 /v3/api-docs 可见），因此不能 rewrite 掉
-              ['/admin-api/api/monitor']: {
-                target: 'http://localhost:48090',
-                ws: true,
+              // 所有以 /admin-api 开头的请求，代理到网关
+              // ⚠️ 不要加 rewrite！让完整路径透传给网关，网关会处理路径重写
+              '/admin-api': {
+                target: env.VITE_BASE_URL || 'http://localhost:48080', // 网关地址
                 changeOrigin: true,
-              },
-              ['/admin-api']: {
-                target: env.VITE_BASE_URL,
-                ws: false,
-                changeOrigin: true,
-                // 保留 /admin-api 前缀，因为后端需要这个路径
+                secure: false,
+                ws: true, // 支持 WebSocket（用于实时监控）
+                // 保留完整路径 /admin-api/...，网关会根据路由规则转发到对应的服务
+                configure: (proxy, _options) => {
+                  // 启动时打印代理目标
+                  console.log('[Vite Proxy] 🚀 代理已启用: /admin-api ->', _options.target);
+                  
+                  // 请求开始
+                  proxy.on('proxyReq', (proxyReq, req) => {
+                    const url = req.url || '';
+                    const method = req.method || 'GET';
+                    console.log(`[Vite Proxy] ➡️  ${method} ${url}`);
+                    console.log(`[Vite Proxy] 🎯 转发到: ${_options.target}${url}`);
+                  });
+                  
+                  // 收到响应
+                  proxy.on('proxyRes', (proxyRes, req) => {
+                    const url = req.url || '';
+                    const status = proxyRes.statusCode || 0;
+                    console.log(`[Vite Proxy] ⬅️  ${status} ${url}`);
+                  });
+                  
+                  // 关键！捕获连接错误（如 ECONNRESET）
+                  proxy.on('error', (err, req, res) => {
+                    const url = req?.url || 'unknown';
+                    const method = req?.method || 'unknown';
+                    console.error(`[Vite Proxy] ❌ 严重错误 (可能后端未启动或崩溃):`);
+                    console.error(`  - 错误: ${err.message}`);
+                    console.error(`  - 错误代码: ${err.code || 'N/A'}`);
+                    console.error(`  - 请求: ${method} ${url}`);
+                    console.error(`  - 目标: ${_options.target}${url}`);
+                    
+                    // 给前端返回友好提示（可选）
+                    if (res && !res.headersSent) {
+                      try {
+                        res.writeHead(502, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ 
+                          error: '网关代理失败，请检查后端服务是否运行',
+                          details: err.message 
+                        }));
+                      } catch (e) {
+                        console.error('[Vite Proxy] 无法写入错误响应:', e);
+                      }
+                    }
+                  });
+                  
+                  // 捕获连接关闭事件
+                  proxy.on('close', (req, socket) => {
+                    const url = req?.url || 'unknown';
+                    console.warn(`[Vite Proxy] ⚠️  连接关闭: ${url}`);
+                  });
+                },
               },
               // 滤波器API代理
               ['/filter-api']: {

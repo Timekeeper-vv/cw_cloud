@@ -15,8 +15,8 @@ public class MonitorWebSocketConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        // 同时兼容直连后端（/api/monitor/ws）和通过网关+前端代理的路径（/admin-api/api/monitor/ws）
-        registry.addHandler(webSocketHandler, "/api/monitor/ws", "/admin-api/api/monitor/ws")
+        // 同时兼容直连后端（/monitor/ws）和通过网关+前端代理的路径（/admin-api/monitor/ws）
+        registry.addHandler(webSocketHandler, "/monitor/ws", "/admin-api/monitor/ws")
                 .setAllowedOrigins("*");
     }
 }

@@ -96,18 +96,26 @@
     <build>
         <finalName>${project.artifactId}</finalName>
         <plugins>
-            <!-- 使用普通 JAR + lib 目录的方式运行，避免 Spring Boot fat jar 的 ClassLoader 干扰 Flink -->
+            <!-- ✅ 关键修改：启用 Spring Boot Plugin，但生成两种 JAR -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring.boot.version}</version>
-                <configuration>
-                    <!-- 禁用 fat jar 重新打包，只保留普通 JAR -->
-                    <skip>true</skip>
-                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <!-- 生成可执行的 fat jar（带 -exec 后缀） -->
+                            <goal>repackage</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>exec</classifier> <!-- 输出: yudao-module-monitor-server-exec.jar -->
+                            <mainClass>cn.iocoder.yudao.module.monitor.MonitorServerApplication</mainClass>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
 
-            <!-- 将所有依赖拷贝到 target/lib，运行时通过 -cp 加载 -->
+            <!-- 将所有依赖拷贝到 target/lib，用于普通 JAR + -cp 方式运行（Flink 兼容） -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>

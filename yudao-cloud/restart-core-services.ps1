@@ -1,40 +1,51 @@
-# Start four core services one by one
+# Restart four core services
 # Services: gateway, system, infra, monitor
-# Each service will be built and started separately
 
-Write-Host "Starting YuDao Cloud Core Services (One by One)" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
+Write-Host "Restarting YuDao Cloud Core Services" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
 
 # Get script directory
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 
-# 1. Start infrastructure services (MySQL, Redis, Nacos)
-Write-Host "`n========================================" -ForegroundColor Cyan
-Write-Host "Step 1: Starting infrastructure services" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
-docker compose -f docker-compose-simple.yml up mysql redis nacos -d
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Docker services failed to start, please check if Docker is running" -ForegroundColor Red
-    exit 1
-}
-
-Write-Host "Waiting for infrastructure services to start (30 seconds)..." -ForegroundColor Yellow
-Start-Sleep -Seconds 30
-Write-Host "Infrastructure services started successfully" -ForegroundColor Green
-
-# 2. Create log directories
-Write-Host "`nCreating log directories..." -ForegroundColor Yellow
-$logDirs = @(
-    "yudao-gateway\logs",
-    "yudao-module-system\yudao-module-system-server\logs",
-    "yudao-module-infra\yudao-module-infra-server\logs",
-    "yudao-module-monitor\yudao-module-monitor-server\logs"
-)
-
-foreach ($dir in $logDirs) {
-    if (-not (Test-Path $dir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+# Function to stop service by port
+function StopServiceByPort {
+    param([int]$Port, [string]$ServiceName)
+    
+    Write-Host "`nStopping $ServiceName (port $Port)..." -ForegroundColor Yellow
+    
+    # Find process using the port
+    $processes = netstat -ano | findstr ":$Port" | findstr "LISTENING"
+    if ($processes) {
+        $processIds = $processes | ForEach-Object {
+            ($_ -split '\s+')[-1]
+        } | Select-Object -Unique
+        
+        foreach ($processId in $processIds) {
+            if ($processId -and $processId -ne "0") {
+                Write-Host "  Found process PID: $processId" -ForegroundColor Gray
+                try {
+                    Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+                    Write-Host "  Process $processId stopped" -ForegroundColor Green
+                } catch {
+                    Write-Host "  Failed to stop process $processId : $($_.Exception.Message)" -ForegroundColor Red
+                }
+            }
+        }
+        
+        # Wait a bit for process to fully stop
+        Start-Sleep -Seconds 2
+        
+        # Verify port is free
+        $stillRunning = netstat -ano | findstr ":$Port" | findstr "LISTENING"
+        if ($stillRunning) {
+            Write-Host "  Warning: Port $Port is still in use" -ForegroundColor Yellow
+        } else {
+            Write-Host "  $ServiceName stopped successfully" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "  $ServiceName is not running" -ForegroundColor Gray
     }
 }
 
@@ -98,7 +109,40 @@ function BuildAndStartService {
     }
 }
 
-# 3. Build and Start Gateway service
+# Step 1: Stop all services
+Write-Host "`n========================================" -ForegroundColor Yellow
+Write-Host "Step 1: Stopping existing services" -ForegroundColor Yellow
+Write-Host "========================================" -ForegroundColor Yellow
+
+StopServiceByPort -Port 48080 -ServiceName "Gateway"
+StopServiceByPort -Port 48081 -ServiceName "System"
+StopServiceByPort -Port 48082 -ServiceName "Infra"
+StopServiceByPort -Port 48090 -ServiceName "Monitor"
+
+Write-Host "`nWaiting for services to fully stop (5 seconds)..." -ForegroundColor Yellow
+Start-Sleep -Seconds 5
+
+# Step 2: Create log directories
+Write-Host "`nCreating log directories..." -ForegroundColor Yellow
+$logDirs = @(
+    "yudao-gateway\logs",
+    "yudao-module-system\yudao-module-system-server\logs",
+    "yudao-module-infra\yudao-module-infra-server\logs",
+    "yudao-module-monitor\yudao-module-monitor-server\logs"
+)
+
+foreach ($dir in $logDirs) {
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+}
+
+# Step 3: Restart services
+Write-Host "`n========================================" -ForegroundColor Yellow
+Write-Host "Step 2: Restarting services" -ForegroundColor Yellow
+Write-Host "========================================" -ForegroundColor Yellow
+
+# 1. Gateway
 $gatewayOk = BuildAndStartService -ServiceName "Gateway" -ServicePath "yudao-gateway" -JarName "yudao-gateway.jar" -Port 48080
 
 if (-not $gatewayOk) {
@@ -109,7 +153,7 @@ if (-not $gatewayOk) {
     }
 }
 
-# 4. Build and Start System service
+# 2. System
 $systemOk = BuildAndStartService -ServiceName "System" -ServicePath "yudao-module-system\yudao-module-system-server" -JarName "yudao-module-system-server.jar" -Port 48081
 
 if (-not $systemOk) {
@@ -120,7 +164,7 @@ if (-not $systemOk) {
     }
 }
 
-# 5. Build and Start Infra service
+# 3. Infra
 $infraOk = BuildAndStartService -ServiceName "Infra" -ServicePath "yudao-module-infra\yudao-module-infra-server" -JarName "yudao-module-infra-server.jar" -Port 48082
 
 if (-not $infraOk) {
@@ -131,7 +175,7 @@ if (-not $infraOk) {
     }
 }
 
-# 6. Build and Start Monitor service (uses classpath)
+# 4. Monitor
 $monitorOk = BuildAndStartService -ServiceName "Monitor" -ServicePath "yudao-module-monitor\yudao-module-monitor-server" -JarName "yudao-module-monitor-server.jar" -Port 48090 -MainClass "cn.iocoder.yudao.module.monitor.MonitorServerApplication" -UseClasspath $true
 
 if (-not $monitorOk) {
@@ -142,9 +186,9 @@ if (-not $monitorOk) {
     }
 }
 
-# 7. Display final status
+# Step 4: Display final status
 Write-Host "`n========================================" -ForegroundColor Green
-Write-Host "All Services Started" -ForegroundColor Green
+Write-Host "All Services Restarted" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host "`nService Status:" -ForegroundColor Cyan
 Write-Host "  Gateway (48080): $(if($gatewayOk){'Running'}else{'Failed'})" -ForegroundColor $(if($gatewayOk){'Green'}else{'Red'})
@@ -164,4 +208,4 @@ Write-Host "  - System:   yudao-module-system\yudao-module-system-server\logs\sy
 Write-Host "  - Infra:    yudao-module-infra\yudao-module-infra-server\logs\infra.log" -ForegroundColor White
 Write-Host "  - Monitor: yudao-module-monitor\yudao-module-monitor-server\logs\monitor.log" -ForegroundColor White
 
-Write-Host "`nNote: Frontend service needs to be started separately" -ForegroundColor Yellow
+Write-Host "`n✅ All core services have been restarted!" -ForegroundColor Green

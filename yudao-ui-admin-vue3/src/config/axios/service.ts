@@ -18,7 +18,25 @@ import { deleteUserCache } from '@/hooks/web/useCache'
 import { ApiEncrypt } from '@/utils/encrypt'
 
 const tenantEnable = import.meta.env.VITE_APP_TENANT_ENABLE
-const { result_code, base_url, request_timeout } = config
+const { result_code, request_timeout } = config
+
+// ⚠️ 关键修复：确保 baseURL 是相对路径
+let base_url = config.base_url
+
+// 开发环境强制校验并修正 baseURL
+if (import.meta.env.DEV) {
+  if (base_url.startsWith('http://') || base_url.startsWith('https://')) {
+    console.warn('[Axios] 检测到 baseURL 为绝对 URL，已强制替换为 /admin-api 以确保 Vite 代理生效')
+    base_url = '/admin-api'
+  }
+  // 调试日志
+  console.group('[Axios Config] 配置检查')
+  console.log('VITE_API_URL:', import.meta.env.VITE_API_URL)
+  console.log('原始 base_url:', config.base_url)
+  console.log('✅ 实际使用的 baseURL:', base_url)
+  console.log('请求将通过 Vite 代理转发到网关 http://localhost:48080')
+  console.groupEnd()
+}
 
 // 需要忽略的提示。忽略后，自动 Promise.reject('error')
 const ignoreMsgs = [
@@ -35,9 +53,10 @@ let isRefreshToken = false
 // 请求白名单，无须 token 的接口
 const whiteList: string[] = ['/login', '/refresh-token']
 
-// 创建axios实例
 const service: AxiosInstance = axios.create({
-  baseURL: base_url, // api 的 base_url
+  // ⚠️ 重要：baseURL 必须是相对路径（如 /admin-api），不能是绝对 URL（如 http://localhost:3000）
+  // 绝对 URL 会绕过 Vite 代理，导致请求直接发送到前端服务器（:3000）而不是网关（:48080）
+  baseURL: base_url, // api 的 base_url（开发环境应为相对路径，如 /admin-api）
   timeout: request_timeout, // 请求超时时间
   withCredentials: false, // 禁用 Cookie 等信息
   // 自定义参数序列化函数
@@ -49,6 +68,9 @@ const service: AxiosInstance = axios.create({
 // request拦截器
 service.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    // 添加请求日志
+    console.log('[Axios] 发起请求:', config.method?.toUpperCase(), config.url);
+    
     // 是否需要设置 token
     let isToken = (config!.headers || {}).isToken === false
     whiteList.some((v) => {
@@ -110,6 +132,9 @@ service.interceptors.request.use(
 // response 拦截器
 service.interceptors.response.use(
   async (response: AxiosResponse<any>) => {
+    // 添加响应日志
+    console.log('[Axios] 收到响应:', response.status, response.config.url);
+    
     let { data } = response
     const config = response.config
     if (!data) {
@@ -222,7 +247,23 @@ service.interceptors.response.use(
     }
   },
   (error: AxiosError) => {
-    console.log('err' + error) // for debug
+    // 详细的错误日志
+    if (error.code === 'ECONNABORTED') {
+      console.error('[Axios] ❌ 请求超时');
+      console.error('  - URL:', error.config?.url);
+      console.error('  - 超时时间:', error.config?.timeout, 'ms');
+    } else if (error.message.includes('Network Error') || error.message.includes('ERR_CONNECTION_RESET')) {
+      console.error('[Axios] ❌ 网络错误（后端未响应或连接重置）');
+      console.error('  - URL:', error.config?.url);
+      console.error('  - 方法:', error.config?.method?.toUpperCase());
+      console.error('  - 错误信息:', error.message);
+      console.error('  可能原因: 后端服务未启动、崩溃、或网关超时');
+    } else {
+      console.error('[Axios] ❌ 请求失败:', error.message);
+      console.error('  - URL:', error.config?.url);
+      console.error('  - 状态码:', error.response?.status);
+    }
+    
     let { message } = error
     const { t } = useI18n()
     if (message === 'Network Error') {
@@ -237,9 +278,13 @@ service.interceptors.response.use(
   }
 )
 
+// ⚠️ 修复 refreshToken：使用相对路径，走 Vite 代理
 const refreshToken = async () => {
-  axios.defaults.headers.common['tenant-id'] = getTenantId()
-  return await axios.post(base_url + '/system/auth/refresh-token?refreshToken=' + getRefreshToken())
+  return await axios.post('/admin-api/system/auth/refresh-token?refreshToken=' + getRefreshToken(), null, {
+    headers: {
+      'tenant-id': getTenantId()
+    }
+  })
 }
 const handleAuthorized = () => {
   const { t } = useI18n()

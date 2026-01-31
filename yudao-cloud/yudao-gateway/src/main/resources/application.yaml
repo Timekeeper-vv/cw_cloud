@@ -6,7 +6,7 @@ spring:
     active: local
 
   codec:
-    max-in-memory-size: 10MB # 调整缓冲区大小https://gitee.com/zhijiantianya/yudao-cloud/pulls/176
+    max-in-memory-size: 500MB # 调整缓冲区大小，支持大文件上传和大响应（TDMS 分析结果可能包含大量数据点）
 
   # Jackson 配置项
   jackson:
@@ -27,6 +27,14 @@ spring:
   cloud:
     # Spring Cloud Gateway 配置项，对应 GatewayProperties 类
     gateway:
+      # HTTP 客户端配置（支持大文件上传）
+      httpclient:
+        connect-timeout: 60000 # 连接超时：60秒
+        response-timeout: 300000 # 响应超时：300秒（5分钟，用于处理大文件）
+        pool:
+          type: ELASTIC # 使用弹性连接池
+          max-connections: 500 # 最大连接数
+          max-idle-time: 30000 # 最大空闲时间：30秒
       # 路由配置项，对应 RouteDefinition 数组
       routes:
         ## system-server 服务
@@ -197,12 +205,16 @@ spring:
           # 本地开发直连（避免 Nacos/服务发现未就绪导致 503）
           uri: http://127.0.0.1:48090
           predicates:
-            - Path=/api/monitor/**
+            - Path=/monitor/**
         - id: monitor-admin-api
           # 本地开发直连（避免 Nacos/服务发现未就绪导致 503）
           uri: http://127.0.0.1:48090
           predicates:
-            - Path=/admin-api/api/monitor/**
+            - Path=/admin-api/monitor/**
+          # 注意：不重写路径，让请求保持 /admin-api/monitor/** 路径
+          # 这样 Controller 注册的路径 /admin-api/monitor/** 就能匹配了
+          # filters:
+          #   - RewritePath=/admin-api/monitor/(.*), /monitor/$1
       x-forwarded:
         prefix-enabled: false # 避免 Swagger 重复带上额外的 /admin-api/system 前缀
 
@@ -212,6 +224,11 @@ server:
 logging:
   file:
     name: ${user.home}/logs/${spring.application.name}.log # 日志文件名，全路径
+  level:
+    # 开启网关和 HTTP 客户端 DEBUG 日志（用于诊断连接问题）
+    org.springframework.cloud.gateway: DEBUG
+    reactor.netty.http.client: DEBUG
+    reactor.netty.http.server: DEBUG
 
 knife4j:
   # 聚合 Swagger 文档，参考 https://doc.xiaominfo.com/docs/action/springcloud-gateway 文档

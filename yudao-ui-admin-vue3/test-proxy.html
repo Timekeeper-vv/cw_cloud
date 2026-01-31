@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>测试 Vite 代理</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>测试 Vite 代理是否生效</h1>
+    <button onclick="testProxy()">测试代理</button>
+    <div id="result"></div>
+    
+    <script>
+        async function testProxy() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p>正在测试...</p>';
+            
+            try {
+                // 测试一个简单的 GET 请求
+                const response = await fetch('/admin-api/system/tenant/simple-list', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                resultDiv.innerHTML = `
+                    <p style="color: green;">✅ 代理工作正常！</p>
+                    <p>状态码: ${response.status}</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p style="color: red;">❌ 代理测试失败</p>
+                    <p>错误: ${error.message}</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

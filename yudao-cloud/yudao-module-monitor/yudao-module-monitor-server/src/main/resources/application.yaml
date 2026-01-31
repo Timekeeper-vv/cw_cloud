@@ -7,6 +7,8 @@ spring:
     active: local
   servlet:
     multipart:
+      # 启用 multipart 支持（必需！否则 @RequestPart 无法工作）
+      enabled: true
       # 允许上传较大的 TDMS 文件（例如 100MB）
       max-file-size: 200MB
       max-request-size: 200MB

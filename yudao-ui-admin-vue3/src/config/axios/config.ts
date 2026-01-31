@@ -7,9 +7,27 @@ const config: {
   /**
    * api请求基础路径
    */
-  // 开发环境优先走相对路径，让 Vite proxy 生效（避免浏览器直接打到 48080 导致 /api/monitor 404）
-  // 生产环境/非 dev 环境仍然按 VITE_BASE_URL + VITE_API_URL 走网关
-  base_url: import.meta.env.DEV ? import.meta.env.VITE_API_URL : import.meta.env.VITE_BASE_URL + import.meta.env.VITE_API_URL,
+  // ⚠️ 重要：开发环境必须使用相对路径，让 Vite proxy 生效
+  // Vite 代理只对相对路径生效，绝对 URL 会绕过代理直接请求
+  // 开发环境：使用相对路径 /admin-api，由 Vite 代理转发到网关
+  // 生产环境：使用完整 URL（VITE_BASE_URL + VITE_API_URL）
+  base_url: import.meta.env.DEV 
+    ? (() => {
+        const apiUrl = import.meta.env.VITE_API_URL || '/admin-api'
+        // 如果是绝对 URL，强制转换为相对路径
+        if (apiUrl.startsWith('http://') || apiUrl.startsWith('https://')) {
+          console.warn('[Axios Config] VITE_API_URL 是绝对 URL，已转换为相对路径以支持 Vite 代理')
+          // 提取路径部分，例如 http://localhost:48080/admin-api -> /admin-api
+          try {
+            const url = new URL(apiUrl)
+            return url.pathname || '/admin-api'
+          } catch {
+            return '/admin-api'
+          }
+        }
+        return apiUrl
+      })()
+    : import.meta.env.VITE_BASE_URL + import.meta.env.VITE_API_URL,
   /**
    * 接口成功返回状态码
    */

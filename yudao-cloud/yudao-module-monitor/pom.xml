@@ -20,4 +20,20 @@
     <description>
         monitor 模块：TDMS 文件解析 + Flink 回放式实时流处理 + WebSocket 推送。
     </description>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Monitor 模块使用 JDK 21（Flink 1.18.x 要求） -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <configuration>
+                        <source>21</source>
+                        <target>21</target>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
 </project>

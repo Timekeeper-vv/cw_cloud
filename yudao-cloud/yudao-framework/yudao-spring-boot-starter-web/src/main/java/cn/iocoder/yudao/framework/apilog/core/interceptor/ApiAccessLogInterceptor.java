@@ -43,6 +43,30 @@ public class ApiAccessLogInterceptor implements HandlerInterceptor {
 
         // 打印 request 日志
         if (!SpringUtils.isProd()) {
+            // 调试：记录 /monitor/realtime/analyze 请求的 Content-Type
+            String uri = request.getRequestURI();
+            if (uri != null && uri.contains("/monitor/realtime/analyze")) {
+                String contentType = request.getContentType();
+                log.warn("🔍 [DEBUG] /monitor/realtime/analyze 请求详情:");
+                log.warn("  - Method: {}", request.getMethod());
+                log.warn("  - URI: {}", uri);
+                log.warn("  - Content-Type: {}", contentType);
+                log.warn("  - Content-Length: {}", request.getContentLength());
+                log.warn("  - Handler 类型: {}", handler != null ? handler.getClass().getName() : "null");
+                if (handlerMethod != null) {
+                    log.warn("  - ✅ 匹配到 HandlerMethod: {}.{}", 
+                            handlerMethod.getBeanType().getSimpleName(), 
+                            handlerMethod.getMethod().getName());
+                } else {
+                    log.warn("  - ⚠️ Handler 不是 HandlerMethod: {}", handler != null ? handler.getClass().getName() : "null");
+                }
+                if (contentType != null && contentType.contains("multipart")) {
+                    log.warn("  ✅ 检测到 multipart/form-data 请求");
+                } else {
+                    log.warn("  ⚠️ 不是 multipart/form-data 请求！可能是问题所在");
+                }
+            }
+            
             Map<String, String> queryString = ServletUtils.getParamMap(request);
             String requestBody = ServletUtils.isJsonRequest(request) ? ServletUtils.getBody(request) : null;
             if (CollUtil.isEmpty(queryString) && StrUtil.isEmpty(requestBody)) {
@@ -66,9 +90,34 @@ public class ApiAccessLogInterceptor implements HandlerInterceptor {
         // 打印 response 日志
         if (!SpringUtils.isProd()) {
             StopWatch stopWatch = (StopWatch) request.getAttribute(ATTRIBUTE_STOP_WATCH);
-            stopWatch.stop();
-            log.info("[afterCompletion][完成请求 URL({}) 耗时({} ms)]",
-                    request.getRequestURI(), stopWatch.getTotalTimeMillis());
+            if (stopWatch != null) {
+                stopWatch.stop();
+                log.info("[afterCompletion][完成请求 URL({}) 耗时({} ms)]",
+                        request.getRequestURI(), stopWatch.getTotalTimeMillis());
+            }
+            
+            // 记录异常（如果有）
+            if (ex != null) {
+                log.error("[afterCompletion][请求 URL({}) 发生异常]", request.getRequestURI(), ex);
+            }
+            
+            // 调试：记录 handler 信息
+            String uri = request.getRequestURI();
+            if (uri != null && uri.contains("/monitor/realtime/analyze")) {
+                log.warn("🔍 [DEBUG] Handler 信息:");
+                log.warn("  - Handler 类型: {}", handler != null ? handler.getClass().getName() : "null");
+                if (handler instanceof HandlerMethod) {
+                    HandlerMethod handlerMethod = (HandlerMethod) handler;
+                    log.warn("  - Controller: {}", handlerMethod.getBeanType().getName());
+                    log.warn("  - Method: {}", handlerMethod.getMethod().getName());
+                } else {
+                    log.warn("  - ⚠️ Handler 不是 HandlerMethod，可能是 ResourceHttpRequestHandler 或其他");
+                }
+                if (ex != null) {
+                    log.warn("  - ❌ 异常类型: {}", ex.getClass().getName());
+                    log.warn("  - ❌ 异常消息: {}", ex.getMessage());
+                }
+            }
         }
     }
 
