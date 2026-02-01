@@ -14,6 +14,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.springframework.stereotype.Service;
@@ -52,8 +53,25 @@ public class FlinkPlaybackServiceImpl implements FlinkPlaybackService {
         ClassLoader springCl = FlinkPlaybackServiceImpl.class.getClassLoader();
         Thread.currentThread().setContextClassLoader(springCl);
 
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
+        // 配置 Flink 以支持 Java 模块系统（Java 9+）
+        // 解决 InaccessibleObjectException: Unable to make field accessible
+        Configuration flinkConfig = new Configuration();
+        // 设置 JVM 参数以开放必要的模块（用于 Kryo 序列化）
+        // 这些参数会在 Flink MiniCluster 启动时传递给 TaskManager
+        // 注意：Flink 1.18.1 使用 env.java.opts 配置项
+        String jvmArgs = "--add-opens=java.base/java.util=ALL-UNNAMED " +
+                         "--add-opens=java.base/java.lang=ALL-UNNAMED " +
+                         "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED " +
+                         "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED";
+        flinkConfig.setString("env.java.opts", jvmArgs);
+        
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment(flinkConfig);
         env.setParallelism(1);
+        
+        // 禁用强制 Kryo，让 Flink 自动检测并使用 POJO 序列化
+        // MonitorStreamMessage 已经提供了无参构造函数（@NoArgsConstructor）和 getter/setter（@Data），符合 POJO 要求
+        // 这样 Flink 会自动使用 POJO 序列化，避免 Kryo 的 Java 模块系统问题
+        env.getConfig().disableForceKryo();
 
         // Flink 1.17 中，如果使用 SourceFunction，需要使用 addSource 而不是 fromSource（fromSource 是新 Source API）
         DataStream<TdmsSample> sourceStream = env

@@ -11,31 +11,19 @@
       </el-upload>
       
       <!-- 播放控制 -->
-      <div class="playback-controls" v-if="analysisResult">
+      <div class="playback-controls" v-if="uploadResult">
         <el-button 
-          :type="isPlaying ? 'warning' : 'success'" 
-          @click="togglePlayback"
-          :disabled="!analysisResult"
+          :type="isPlaying ? 'success' : 'info'" 
+          :disabled="!uploadResult"
         >
           <el-icon style="margin-right: 4px;">
-            <VideoPause v-if="isPlaying" />
-            <VideoPlay v-else />
+            <VideoPlay v-if="isPlaying" />
           </el-icon>
-          {{ isPlaying ? '暂停' : '播放' }}
+          {{ isPlaying ? 'Flink 流式处理中...' : '等待连接...' }}
         </el-button>
-        <el-slider
-          v-model="playbackSpeed"
-          :min="1"
-          :max="10"
-          :step="1"
-          :show-tooltip="true"
-          :format-tooltip="(val) => `${val}x`"
-          style="width: 150px; margin: 0 12px;"
-          :disabled="isPlaying"
-        />
         <span class="playback-info">
-          速度: {{ playbackSpeed }}x | 
-          进度: {{ currentPlaybackIndex }} / {{ totalDataPoints }}
+          数据点数: {{ currentPlaybackIndex }} |
+          处理速度: <span style="color: var(--el-color-primary); font-weight: 600;">{{ processingSpeed.toFixed(1) }} k/s</span>
         </span>
       </div>
 
@@ -94,7 +82,7 @@
           </el-form>
         </el-card>
 
-        <div v-if="!analysisResult" class="placeholder">
+        <div v-if="!uploadResult" class="placeholder">
           请先上传有效 TDMS 文件
         </div>
         <div v-else ref="chartContainer" id="realtime-chart" style="height: 420px" v-loading="analyzing"></div>
@@ -122,6 +110,11 @@
             <el-descriptions-item label="单位">
               {{ metrics.channelUnit }}
             </el-descriptions-item>
+            <el-descriptions-item label="实时处理速度" v-if="isPlaying">
+              <span style="color: var(--el-color-primary); font-weight: 600;">
+                {{ processingSpeed.toFixed(1) }} k/s
+              </span>
+            </el-descriptions-item>
           </el-descriptions>
         </el-card>
       </el-col>
@@ -132,30 +125,38 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import * as echarts from 'echarts'
-import { analyzeRealtime, analyzeRealtimeStream, type HistoryAnalysisResult, type FilterType, type KalmanParams } from '@/api/monitor'
+import { uploadTdms, type MonitorUploadResp, type MonitorStreamMessage, type FilterType, type KalmanParams } from '@/api/monitor'
 import { ElMessage } from 'element-plus'
 import { VideoPlay, VideoPause } from '@element-plus/icons-vue'
 
 const uploading = ref(false)
 const analyzing = ref(false)
-const analysisResult = ref<HistoryAnalysisResult | null>(null)
+const uploadResult = ref<MonitorUploadResp | null>(null)
 const chartRef = ref<echarts.ECharts | null>(null)
 const chartContainer = ref<HTMLDivElement | null>(null)
+
+// WebSocket 连接
+const websocket = ref<WebSocket | null>(null)
+const jobId = ref<string | null>(null)
 
 // 波形数据
 const rawSeries: [number, number][] = []
 const filteredSeries: [number, number][] = []
 const anomalySeries: [number, number][] = []
 
-// 播放控制
-const isPlaying = ref(false)
-const playbackSpeed = ref(5) // 播放速度倍数
+// 播放控制（Flink 流式数据，不需要手动播放控制）
+const isPlaying = ref(false) // Flink 自动推送，这个状态用于显示连接状态
+const playbackSpeed = ref(5) // 保留用于显示，实际由 Flink 控制
 const currentPlaybackIndex = ref(0)
 const totalDataPoints = ref(0)
-const playbackTimer = ref<number | null>(null)
-const allRawPoints: [number, number][] = [] // 存储所有原始数据点
-const allFilteredPoints: [number, number][] = [] // 存储所有滤波数据点
-const allAnomalyPoints: [number, number][] = [] // 存储所有异常点
+
+// 实时处理速度统计（从 WebSocket 消息中获取）
+const processingSpeed = ref(0) // 处理速度（k/s，千点/秒）
+const lastUpdateTime = ref<number | null>(null) // 上次更新时间
+const lastUpdateIndex = ref(0) // 上次更新的索引
+
+// 时间戳基准（用于计算相对时间）
+const startTimestamp = ref<number | null>(null)
 
 // Y 轴范围（根据数据自动调整）
 const yMin = ref(-0.6)
@@ -186,6 +187,12 @@ const initChart = () => {
     chartRef.value.dispose()
   }
   chartRef.value = echarts.init(chartContainer.value)
+  
+  // 初始化时清空数据
+  rawSeries.length = 0
+  filteredSeries.length = 0
+  anomalySeries.length = 0
+  
   chartRef.value.setOption({
     // 实时检测需要动画效果，但为了性能可以禁用
     animation: false,
@@ -197,34 +204,16 @@ const initChart = () => {
     xAxis: {
       type: 'value',
       boundaryGap: false,
-      name: '时间 (s)'
-      // 不设置 min/max，让 dataZoom 控制显示范围
+      name: '时间 (s)',
+      min: 0,
+      max: 10 // 初始范围，后续会根据数据动态调整
     },
     yAxis: {
       type: 'value',
       scale: true,
       name: metrics.channelUnit || 'Amplitude'
     },
-    // 实时滚动：使用 dataZoom 实现示波器效果
-    dataZoom: [
-      {
-        type: 'slider',
-        show: true,
-        xAxisIndex: [0],
-        start: 95, // 初始显示最后 5% 的数据
-        end: 100,
-        realtime: true,
-        throttle: 100 // 防抖，避免频繁触发
-      },
-      {
-        type: 'inside',
-        xAxisIndex: [0],
-        start: 95,
-        end: 100,
-        realtime: true,
-        throttle: 100
-      }
-    ],
+    // 注意：初始时不设置 dataZoom，等有数据后再设置，避免 ECharts 错误
     // 实时检测波形：每个样本点以点显示，然后用平滑曲线连接
     series: [
       {
@@ -303,102 +292,18 @@ const updateChart = () => {
   })
 }
 
-// 播放控制函数
+// Flink 流式处理不需要手动播放控制，数据自动推送
+// 保留此函数以防将来需要
 const togglePlayback = () => {
-  if (!analysisResult.value || totalDataPoints.value === 0) return
-  
-  if (isPlaying.value) {
-    // 暂停
-    if (playbackTimer.value) {
-      clearInterval(playbackTimer.value)
-      playbackTimer.value = null
-    }
-    isPlaying.value = false
-  } else {
-    // 播放
-    isPlaying.value = true
-    startPlayback()
-  }
+  // Flink 自动推送，不需要手动控制
+  ElMessage.info('Flink 流式处理自动运行，无需手动控制')
 }
 
-const startPlayback = () => {
-  if (playbackTimer.value) {
-    clearInterval(playbackTimer.value)
-  }
-  
-  // 如果已经播放完，从头开始
-  if (currentPlaybackIndex.value >= totalDataPoints.value) {
-    currentPlaybackIndex.value = 0
-    rawSeries.length = 0
-    filteredSeries.length = 0
-    anomalySeries.length = 0
-  }
-  
-  // 计算每次更新的点数（根据播放速度）
-  const pointsPerUpdate = Math.max(1, Math.floor(playbackSpeed.value))
-  const interval = 100 / playbackSpeed.value // 基础间隔 100ms，速度越快间隔越短
-  
-  // 设置窗口大小（显示最近多少个数据点）
-  const windowSize = 500 // 窗口大小，可以根据需要调整
-  
-  playbackTimer.value = window.setInterval(() => {
-    if (currentPlaybackIndex.value >= totalDataPoints.value) {
-      // 播放完成
-      if (playbackTimer.value) {
-        clearInterval(playbackTimer.value)
-        playbackTimer.value = null
-      }
-      isPlaying.value = false
-      return
-    }
-    
-    // 添加新的数据点
-    const endIndex = Math.min(
-      currentPlaybackIndex.value + pointsPerUpdate,
-      totalDataPoints.value
-    )
-    
-    for (let i = currentPlaybackIndex.value; i < endIndex; i++) {
-      if (allRawPoints[i]) {
-        rawSeries.push(allRawPoints[i])
-      }
-      if (allFilteredPoints[i]) {
-        filteredSeries.push(allFilteredPoints[i])
-      }
-    }
-    
-    // 添加异常点（只添加当前范围内的）
-    allAnomalyPoints.forEach(point => {
-      const timestamp = point[0]
-      const lastTimestamp = rawSeries.length > 0 ? rawSeries[rawSeries.length - 1][0] : 0
-      if (timestamp <= lastTimestamp && !anomalySeries.find(p => p[0] === timestamp)) {
-        anomalySeries.push(point)
-      }
-    })
-    
-    currentPlaybackIndex.value = endIndex
-    
-    // 实现流动效果：保持窗口大小，让数据从右边进入，左边移出
-    if (rawSeries.length > windowSize) {
-      const removeCount = rawSeries.length - windowSize
-      rawSeries.splice(0, removeCount)
-      filteredSeries.splice(0, removeCount)
-      // 清理超出窗口的异常点
-      const firstTimestamp = rawSeries.length > 0 ? rawSeries[0][0] : 0
-      for (let i = anomalySeries.length - 1; i >= 0; i--) {
-        if (anomalySeries[i][0] < firstTimestamp) {
-          anomalySeries.splice(i, 1)
-        }
-      }
-    }
-    
-    updateChartWithFlow()
-  }, interval)
-}
+// Flink 流式处理不需要手动播放逻辑，数据通过 WebSocket 自动推送
 
 // 更新图表，实现流动效果（使用 dataZoom 自动滚动）
 const updateChartWithFlow = () => {
-  if (!chartRef.value || !analysisResult.value) return
+  if (!chartRef.value || rawSeries.length === 0) return
   const unit = metrics.channelUnit || 'Amplitude'
   
   // 计算Y轴范围（基于当前显示的数据）
@@ -410,8 +315,6 @@ const updateChartWithFlow = () => {
     yMin.value = minVal - padding
     yMax.value = maxVal + padding
   }
-  
-  if (rawSeries.length === 0) return
   
   // 计算 dataZoom 的 start 和 end，实现自动滚动
   // 显示最后 5% 的数据窗口，随着数据增加自动向右滚动
@@ -447,8 +350,10 @@ const updateChartWithFlow = () => {
     
     chartRef.value.setOption({
       xAxis: {
-        name: '数据点索引'
-        // 不设置 min/max，让 dataZoom 控制
+        type: 'value',
+        name: '数据点索引',
+        min: 0,
+        max: Math.max(10, totalPoints)
       },
       yAxis: { 
         name: unit, 
@@ -457,12 +362,21 @@ const updateChartWithFlow = () => {
       },
       dataZoom: [
         {
+          type: 'slider',
+          show: true,
+          xAxisIndex: [0],
           start: dataZoomStart,
-          end: dataZoomEnd
+          end: dataZoomEnd,
+          realtime: true,
+          throttle: 100
         },
         {
+          type: 'inside',
+          xAxisIndex: [0],
           start: dataZoomStart,
-          end: dataZoomEnd
+          end: dataZoomEnd,
+          realtime: true,
+          throttle: 100
         }
       ],
       series: [
@@ -485,6 +399,12 @@ const updateChartWithFlow = () => {
   
   // 更新图表：只更新数据和 dataZoom，让 ECharts 自动处理滚动
   chartRef.value.setOption({
+    xAxis: {
+      type: 'value',
+      name: '时间 (s)',
+      min: firstTimestamp,
+      max: lastTimestamp
+    },
     yAxis: { 
       name: unit, 
       min: yMin.value, 
@@ -492,12 +412,21 @@ const updateChartWithFlow = () => {
     },
     dataZoom: [
       {
+        type: 'slider',
+        show: true,
+        xAxisIndex: [0],
         start: dataZoomStart,
-        end: dataZoomEnd
+        end: dataZoomEnd,
+        realtime: true,
+        throttle: 100
       },
       {
+        type: 'inside',
+        xAxisIndex: [0],
         start: dataZoomStart,
-        end: dataZoomEnd
+        end: dataZoomEnd,
+        realtime: true,
+        throttle: 100
       }
     ],
     series: [
@@ -509,162 +438,187 @@ const updateChartWithFlow = () => {
   }, { notMerge: false })
 }
 
+// 建立 WebSocket 连接
+const connectWebSocket = (websocketPath: string) => {
+  // 关闭旧连接
+  if (websocket.value) {
+    websocket.value.close()
+    websocket.value = null
+  }
+  
+  // 构建 WebSocket URL
+  // websocketPath 已经是完整路径，如 /admin-api/monitor/ws?jobId=xxx
+  // 需要根据当前环境构建完整 URL
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const host = window.location.host
+  // 如果 websocketPath 以 / 开头，直接拼接
+  const wsUrl = websocketPath.startsWith('/') 
+    ? `${protocol}//${host}${websocketPath}`
+    : `${protocol}//${host}/${websocketPath}`
+  
+  console.log('🔌 连接 WebSocket:', wsUrl)
+  
+  const ws = new WebSocket(wsUrl)
+  
+  ws.onopen = () => {
+    console.log('✅ WebSocket 连接已建立')
+    isPlaying.value = true
+    ElMessage.success('Flink 流式处理已启动')
+  }
+  
+  ws.onmessage = (event) => {
+    try {
+      const message: MonitorStreamMessage = JSON.parse(event.data)
+      handleWebSocketMessage(message)
+    } catch (err) {
+      console.error('解析 WebSocket 消息失败:', err, event.data)
+    }
+  }
+  
+  ws.onerror = (error) => {
+    console.error('WebSocket 错误:', error)
+    ElMessage.error('WebSocket 连接错误')
+    isPlaying.value = false
+  }
+  
+  ws.onclose = (event) => {
+    console.log('WebSocket 连接已关闭', {
+      code: event.code,
+      reason: event.reason,
+      wasClean: event.wasClean
+    })
+    isPlaying.value = false
+    websocket.value = null
+    
+    // 如果连接异常关闭，显示错误信息
+    if (!event.wasClean) {
+      ElMessage.warning('WebSocket 连接异常关闭，请检查 Flink 作业状态')
+    }
+  }
+  
+  websocket.value = ws
+}
+
+// 处理 WebSocket 消息
+const handleWebSocketMessage = (message: MonitorStreamMessage) => {
+  // 初始化时间戳基准（使用第一个消息的时间戳）
+  if (startTimestamp.value === null) {
+    startTimestamp.value = message.timestamp
+  }
+  
+  // 计算相对时间（秒）
+  const relativeTime = (message.timestamp - startTimestamp.value) / 1000.0
+  
+  // 添加数据点到图表
+  rawSeries.push([relativeTime, message.originalValue])
+  filteredSeries.push([relativeTime, message.filteredValue])
+  
+  // 如果是异常点，添加到异常序列
+  if (message.anomaly) {
+    anomalySeries.push([relativeTime, message.originalValue])
+  }
+  
+  // 保持窗口大小（500个点）
+  const windowSize = 500
+  if (rawSeries.length > windowSize) {
+    rawSeries.shift()
+    filteredSeries.shift()
+    // 清理超出窗口的异常点
+    const firstTime = rawSeries.length > 0 ? rawSeries[0][0] : 0
+    for (let i = anomalySeries.length - 1; i >= 0; i--) {
+      if (anomalySeries[i][0] < firstTime) {
+        anomalySeries.splice(i, 1)
+      }
+    }
+  }
+  
+  // 更新统计信息
+  currentPlaybackIndex.value++
+  totalDataPoints.value = message.channel?.sampleCount || currentPlaybackIndex.value
+  metrics.anomalyCount = message.anomalyCount
+  metrics.channelName = message.channel?.name || ''
+  metrics.channelUnit = message.channel?.unit || 'Amplitude'
+  processingSpeed.value = message.throughputKps || 0
+  
+  // 更新图表
+  updateChartWithFlow()
+}
+
 const handleUpload = async (options: any) => {
   uploading.value = true
   analyzing.value = true
+  
+  // 关闭旧连接
+  if (websocket.value) {
+    websocket.value.close()
+    websocket.value = null
+  }
+  
+  // 清空数据
+  rawSeries.length = 0
+  filteredSeries.length = 0
+  anomalySeries.length = 0
+  currentPlaybackIndex.value = 0
+  totalDataPoints.value = 0
+  startTimestamp.value = null
+  processingSpeed.value = 0
+  metrics.totalPoints = 0
+  metrics.anomalyCount = 0
+  metrics.channelName = ''
+  metrics.channelUnit = ''
+  
   const form = new FormData()
   form.append('file', options.file as File)
+  
   try {
-    // 调用后端接口获取处理后的JSON数据
-    const resp = await analyzeRealtime(form, { 
+    // 调用 Flink 上传接口
+    const resp = await uploadTdms(form, { 
       filterType: filterType.value, 
       ...kalmanParams 
     })
     
-    if (!resp.points || resp.points.length === 0) {
-      ElMessage.warning('未解析到有效样本')
-      return
-    }
-    
-    analysisResult.value = resp
+    uploadResult.value = resp
+    jobId.value = resp.jobId
     
     // 更新统计信息
-    metrics.totalPoints = resp.points.length
-    metrics.anomalyCount = resp.anomalyCount
     metrics.channelName = resp.channel?.name || ''
     metrics.channelUnit = resp.channel?.unit || 'Amplitude'
+    totalDataPoints.value = resp.channel?.sampleCount || 0
     
-    // 处理数据，转换为图表需要的格式
-    rawSeries.length = 0
-    filteredSeries.length = 0
-    anomalySeries.length = 0
-    
-    // 先收集异常点的时间戳（用于后续标记）
-    const anomalyTimestamps = new Set<number>()
-    resp.points.forEach(point => {
-      if (point.isAnomaly) {
-        anomalyTimestamps.add(point.timestamp)
-      }
-    })
-    
-    // 对数据进行线性插值，增加数据点密度，使曲线更平滑
-    const interpolatePoints = (points: Array<{ timestamp: number, rawValue: number, filteredValue: number, isAnomaly?: boolean }>, factor: number = 2) => {
-      if (points.length < 2) return points
-      const interpolated: typeof points = []
-      for (let i = 0; i < points.length - 1; i++) {
-        interpolated.push(points[i])
-        // 在相邻两点之间插入插值点
-        for (let j = 1; j < factor; j++) {
-          const ratio = j / factor
-          const t1 = points[i].timestamp
-          const t2 = points[i + 1].timestamp
-          const v1 = points[i].rawValue
-          const v2 = points[i + 1].rawValue
-          const f1 = points[i].filteredValue
-          const f2 = points[i + 1].filteredValue
-          interpolated.push({
-            timestamp: t1 + (t2 - t1) * ratio,
-            rawValue: v1 + (v2 - v1) * ratio,
-            filteredValue: f1 + (f2 - f1) * ratio,
-            isAnomaly: false // 插值点不标记为异常
-          })
-        }
-      }
-      interpolated.push(points[points.length - 1])
-      return interpolated
-    }
-    
-    // 检查时间戳范围和分布
-    const timestamps = resp.points.map(p => p.timestamp)
-    const minTimestamp = Math.min(...timestamps)
-    const maxTimestamp = Math.max(...timestamps)
-    const timeRange = maxTimestamp - minTimestamp
-    
-    console.log('📊 时间戳分析:', {
-      totalPoints: resp.points.length,
-      minTimestamp,
-      maxTimestamp,
-      timeRange,
-      timeRangeSeconds: timeRange,
-      avgInterval: timeRange / resp.points.length,
-      firstFewTimestamps: timestamps.slice(0, 5),
-      lastFewTimestamps: timestamps.slice(-5)
-    })
-    
-    // 如果时间戳范围太小（可能是时间戳单位问题），尝试调整
-    // 如果时间戳都是相同的值，说明数据有问题
-    if (timeRange === 0) {
-      console.warn('⚠️ 警告：所有时间戳相同，可能是数据问题')
-      ElMessage.warning('时间戳数据异常，所有点的时间戳相同')
-    }
-    
-    // 如果时间戳范围很小（小于0.001），可能是单位问题，尝试转换为秒
-    let normalizedPoints = resp.points
-    if (timeRange > 0 && timeRange < 0.001) {
-      console.warn('⚠️ 时间戳范围太小，可能是毫秒单位，尝试转换')
-      // 如果时间戳看起来像毫秒（很大），转换为秒
-      if (minTimestamp > 1000000) {
-        normalizedPoints = resp.points.map(p => ({
-          ...p,
-          timestamp: p.timestamp / 1000 // 毫秒转秒
-        }))
-        console.log('✅ 已将时间戳从毫秒转换为秒')
-      }
-    }
-    
-    // 如果数据点较少，进行插值处理
-    const processedPoints = normalizedPoints.length < 1000 
-      ? interpolatePoints(normalizedPoints, 2) // 数据点少于1000时，插值2倍
-      : normalizedPoints // 数据点较多时，不插值（避免性能问题）
-    
-    // 存储所有数据点（用于播放）
-    allRawPoints.length = 0
-    allFilteredPoints.length = 0
-    allAnomalyPoints.length = 0
-    
-    // 处理图表数据
-    processedPoints.forEach(point => {
-      allRawPoints.push([point.timestamp, point.rawValue])
-      allFilteredPoints.push([point.timestamp, point.filteredValue])
-    })
-    
-    // 处理异常点（只使用原始数据点，不使用插值点）
-    resp.points.forEach(point => {
-      if (point.isAnomaly) {
-        allAnomalyPoints.push([point.timestamp, point.rawValue])
-      }
-    })
-    
-    // 初始化播放状态
-    totalDataPoints.value = allRawPoints.length
-    currentPlaybackIndex.value = 0
-    rawSeries.length = 0
-    filteredSeries.length = 0
-    anomalySeries.length = 0
-    
-    // 等待 DOM 更新出 realtime-chart 容器，再初始化 ECharts
+    // 等待 DOM 更新，初始化图表
     await nextTick()
     initChart()
     
-    // 默认不自动播放，用户点击播放按钮后才会播放
-    // 如果需要自动播放，可以取消下面的注释
-    // togglePlayback()
+    // 建立 WebSocket 连接
+    connectWebSocket(resp.websocketPath)
     
-    ElMessage.success(`分析完成，共 ${metrics.totalPoints} 个数据点，检测到 ${metrics.anomalyCount} 个异常点。点击播放按钮查看动画效果。`)
+    ElMessage.success('文件上传成功，Flink 流式处理已启动')
   } catch (err: any) {
-    ElMessage.error(err?.message || '上传和分析失败')
+    ElMessage.error(err?.message || '上传失败')
+    console.error('上传失败:', err)
   } finally {
     uploading.value = false
     analyzing.value = false
   }
 }
 
-// 切换滤波器：重新分析数据
+// 切换滤波器：更新 Flink 作业配置
 watch(
   () => [filterType.value, kalmanParams.kalmanQ, kalmanParams.kalmanR, kalmanParams.kalmanP0, kalmanParams.kalmanX0N] as const,
   async () => {
-    // 如果有已上传的文件，重新分析
-    // 这里需要保存上次上传的文件，暂时不自动重新分析，由用户手动重新上传
+    // 如果 Flink 作业正在运行，更新滤波器配置
+    if (jobId.value && websocket.value && websocket.value.readyState === WebSocket.OPEN) {
+      try {
+        const { updateFilterConfig } = await import('@/api/monitor')
+        await updateFilterConfig(jobId.value, {
+          filterType: filterType.value,
+          ...kalmanParams
+        })
+        ElMessage.success('滤波器配置已更新，Flink 作业将重启')
+      } catch (err: any) {
+        ElMessage.error('更新滤波器配置失败: ' + (err?.message || '未知错误'))
+      }
+    }
   }
 )
 
@@ -674,11 +628,22 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  // 清理资源
-  if (playbackTimer.value) {
-    clearInterval(playbackTimer.value)
-    playbackTimer.value = null
+  // 关闭 WebSocket 连接
+  if (websocket.value) {
+    websocket.value.close()
+    websocket.value = null
   }
+  
+  // 停止 Flink 作业
+  if (jobId.value) {
+    import('@/api/monitor').then(({ stopMonitorJob }) => {
+      stopMonitorJob(jobId.value!).catch((err: any) => {
+        console.error('停止 Flink 作业失败:', err)
+      })
+    })
+  }
+  
+  // 清理图表
   if (chartRef.value) {
     chartRef.value.dispose()
   }

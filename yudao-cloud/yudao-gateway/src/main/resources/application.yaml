@@ -215,6 +215,12 @@ spring:
           # 这样 Controller 注册的路径 /admin-api/monitor/** 就能匹配了
           # filters:
           #   - RewritePath=/admin-api/monitor/(.*), /monitor/$1
+        - id: monitor-websocket
+          # WebSocket 路由（Spring Cloud Gateway 自动支持 WebSocket 升级）
+          uri: http://127.0.0.1:48090
+          predicates:
+            - Path=/admin-api/monitor/ws/**
+          # WebSocket 不需要重写路径，直接透传
       x-forwarded:
         prefix-enabled: false # 避免 Swagger 重复带上额外的 /admin-api/system 前缀
 

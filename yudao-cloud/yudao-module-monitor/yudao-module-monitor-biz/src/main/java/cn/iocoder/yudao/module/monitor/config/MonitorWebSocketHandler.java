@@ -21,20 +21,36 @@ public class MonitorWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
+        log.info("🔌 WebSocket 连接尝试建立: uri={}, remote={}", 
+                session.getUri(), session.getRemoteAddress());
+        
         Map<String, String> params = UriComponentsBuilder.fromUri(session.getUri()).build().getQueryParams()
                 .toSingleValueMap();
         String jobId = params.get("jobId");
-        if (jobId == null) {
+        
+        log.info("📋 WebSocket 连接参数: jobId={}, 所有参数={}", jobId, params);
+        
+        if (jobId == null || jobId.isEmpty()) {
+            log.warn("❌ WebSocket 连接失败: 缺少 jobId 参数");
             closeWithReason(session, "缺少 jobId 参数");
             return;
         }
+        
         resultHub.register(jobId, session);
-        log.info("WebSocket 已连接 jobId={}", jobId);
+        log.info("✅ WebSocket 已连接并注册: jobId={}, sessionId={}", jobId, session.getId());
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+        log.info("🔌 WebSocket 连接已关闭: sessionId={}, code={}, reason={}", 
+                session.getId(), status.getCode(), status.getReason());
         resultHub.unregister(session);
+    }
+    
+    @Override
+    public void handleTransportError(WebSocketSession session, Throwable exception) {
+        log.error("❌ WebSocket 传输错误: sessionId={}, error={}", 
+                session.getId(), exception.getMessage(), exception);
     }
 
     @Override

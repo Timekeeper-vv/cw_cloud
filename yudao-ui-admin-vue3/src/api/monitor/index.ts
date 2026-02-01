@@ -26,6 +26,29 @@ export interface HistoryAnalysisPoint {
   channelName: string
 }
 
+export interface MonitorStreamMessage {
+  jobId: string
+  timestamp: number
+  originalValue: number
+  filteredValue: number
+  anomaly: boolean
+  energy: number
+  snrBeforeDb: number
+  snrAfterDb: number
+  snrDeltaDb: number
+  throughputKps: number
+  processingDelayMs: number
+  anomalyCount: number
+  channel: {
+    name: string
+    unit: string
+    sampleRate: number
+    startTimestamp: number
+    endTimestamp: number
+    sampleCount: number
+  }
+}
+
 export interface HistoryAnalysisResult {
   channel: {
     name: string

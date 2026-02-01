@@ -42,7 +42,7 @@ public class MonitorUploadController {
 
     @PostMapping("/upload")
     @Operation(summary = "上传 TDMS 文件并启动实时处理")
-    public CommonResult<MonitorUploadResponse> upload(@RequestParam(value = "file", required = false) MultipartFile file, // ✅ 改为 @RequestParam
+    public CommonResult<MonitorUploadResponse> upload(@RequestParam(value = "file", required = false) MultipartFile file,
                                                       @RequestParam(value = "anomalyThreshold", required = false) Double threshold,
                                                       @RequestParam(value = "anomalyEnabled", defaultValue = "true") boolean anomalyEnabled,
                                                       @RequestParam(value = "filterType", required = false, defaultValue = "KALMAN") FilterType filterType,
@@ -87,7 +87,7 @@ public class MonitorUploadController {
     @PostMapping("/history/analyze")
     @Operation(summary = "TDMS 历史离线分析")
     public CommonResult<HistoryAnalysisResult> analyzeHistory(
-            @RequestParam("files") MultipartFile[] files, // ✅ 改为 @RequestParam
+            @RequestParam("files") MultipartFile[] files,
             @RequestParam(value = "groups", required = false) String[] groups,
             @RequestParam(value = "thresholdFactor", required = false, defaultValue = "1.5") Double thresholdFactor,
             @RequestParam(value = "filterType", required = false, defaultValue = "KALMAN") FilterType filterType,
@@ -114,7 +114,8 @@ public class MonitorUploadController {
         return success(result);
     }
 
-    @PostMapping("/{jobId}/anomaly")
+    // ✅ 关键修复：为 jobId 添加 UUID 正则约束，避免与 /ws 冲突
+    @PostMapping("/{jobId:[a-fA-F0-9\\-]{36}}/anomaly")
     @Operation(summary = "更新异常检测阈值")
     public CommonResult<Boolean> updateAnomaly(@PathVariable String jobId,
                                                @RequestParam double threshold,
@@ -123,7 +124,8 @@ public class MonitorUploadController {
         return success(true);
     }
 
-    @PostMapping("/{jobId}/filter")
+    // ✅ 关键修复：为 jobId 添加 UUID 正则约束，避免与 /ws 冲突
+    @PostMapping("/{jobId:[a-fA-F0-9\\-]{36}}/filter")
     @Operation(summary = "更新滤波器类型与参数（会重启实时作业）")
     public CommonResult<Boolean> updateFilter(@PathVariable String jobId,
                                               @RequestParam(value = "filterType", required = false, defaultValue = "KALMAN") FilterType filterType,
@@ -141,7 +143,8 @@ public class MonitorUploadController {
         return success(true);
     }
 
-    @DeleteMapping("/{jobId}")
+    // ✅ 同样修复 stop 接口（虽然 DELETE 不影响 WebSocket GET，但保持一致性）
+    @DeleteMapping("/{jobId:[a-fA-F0-9\\-]{36}}")
     @Operation(summary = "停止任务")
     public CommonResult<Boolean> stop(@PathVariable String jobId) {
         flinkPlaybackService.stopJob(jobId);
@@ -151,7 +154,7 @@ public class MonitorUploadController {
     @PostMapping(value = "/realtime/analyze", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "实时检测：上传文件并返回处理后的JSON数据")
     public CommonResult<HistoryAnalysisResult> analyzeRealtime(
-            @RequestParam("file") MultipartFile file, // ✅ 关键修复：@RequestPart → @RequestParam
+            @RequestParam("file") MultipartFile file,
             @RequestParam(value = "filterType", required = false, defaultValue = "KALMAN") FilterType filterType,
             @RequestParam(value = "kalmanQ", required = false, defaultValue = "1e-5") Double kalmanQ,
             @RequestParam(value = "kalmanR", required = false, defaultValue = "0.1") Double kalmanR,
@@ -208,7 +211,7 @@ public class MonitorUploadController {
     @PostMapping(value = "/realtime/analyze-stream", produces = MediaType.APPLICATION_NDJSON_VALUE, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "实时检测：上传文件并流式返回处理后的JSON数据（支持大文件）")
     public Flux<String> analyzeRealtimeStream(
-            @RequestParam("file") MultipartFile file, // ✅ 同样修复
+            @RequestParam("file") MultipartFile file,
             @RequestParam(value = "filterType", required = false, defaultValue = "KALMAN") FilterType filterType,
             @RequestParam(value = "kalmanQ", required = false, defaultValue = "1e-5") Double kalmanQ,
             @RequestParam(value = "kalmanR", required = false, defaultValue = "0.1") Double kalmanR,
